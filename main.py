@@ -5,8 +5,8 @@ import asyncio
 import datetime
 from flask import Flask
 from threading import Thread
+import os
 
-# הגדרת שרת פנימי לשמירה על יציבות
 app = Flask('')
 
 @app.route('/')
@@ -20,7 +20,6 @@ def keep_alive():
     t = Thread(target=run)
     t.start()
 
-# הגדרת ה-Intents של הבוט (כולל התיקון החשוב ללוגים!)
 intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
@@ -29,13 +28,11 @@ intents.messages = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# --- משתני המערכת והאיידיז של CHICAGO CITY ---
 ROLE_VERIFIED = 1483039214793789489
 CATEGORY_TICKETS = 1483039218954534966
 ROLE_STAFF = 1483039215364345930
 CHANNEL_GIVEAWAY = 1483039216366780532
 
-# ערוצי מערכת הלוגים המלאה
 LOG_CHANNELS = {
     "channel_create": 1483039219654852617,
     "channel_delete": 1483039219654852616,
@@ -56,19 +53,20 @@ LOG_CHANNELS = {
 warnings_db = {}
 invites_cache = {}
 
-# --- 1. מערכת אימות (VERIFICATION) ---
+# תיקון אינטראקציות למערכת אימות
 class VerifyView(View):
     def __init__(self):
         super().__init__(timeout=None)
 
     @discord.ui.button(label="התאמת עכשיו 🛡️", style=discord.ButtonStyle.green, custom_id="verify_btn")
     async def verify_button(self, interaction: discord.Interaction, button: Button):
+        await interaction.response.defer(ephemeral=True) # תיקון קריסה ב-Render
         role = interaction.guild.get_role(ROLE_VERIFIED)
         if role in interaction.user.roles:
-            await interaction.response.send_message("אתה כבר מאומת בשרת!", ephemeral=True)
+            await interaction.followup.send("אתה כבר מאומת בשרת!", ephemeral=True)
         else:
             await interaction.user.add_roles(role)
-            await interaction.response.send_message("אימות בוצע בהצלחה! ברוך הבא ל-Chicago City. 🎉", ephemeral=True)
+            await interaction.followup.send("אימות בוצע בהצלחה! ברוך הבא ל-Chicago City. 🎉", ephemeral=True)
 
 @bot.command()
 @commands.has_permissions(administrator=True)
@@ -81,34 +79,36 @@ async def setup_verify(ctx):
     embed.set_footer(text="Chicago City Security")
     await ctx.send(embed=embed, view=VerifyView())
 
-# --- 2. מערכת טיקטים מתקדמת (TICKETS) ---
+# תיקון אינטראקציות למערכת טיקטים
 class TicketControls(View):
     def __init__(self):
         super().__init__(timeout=None)
 
     @discord.ui.button(label="קח טיפול 🙋‍♂️", style=discord.ButtonStyle.blurple, custom_id="ticket_claim")
     async def claim(self, interaction: discord.Interaction, button: Button):
+        await interaction.response.defer()
         if not interaction.user.get_role(ROLE_STAFF):
-            return await interaction.response.send_message("אין לך הרשאה לבצע פעולה זו.", ephemeral=True)
+            return await interaction.followup.send("אין לך הרשאה לבצע פעולה זו.", ephemeral=True)
         await interaction.channel.send(f"הפנייה נלקחה לטיפול על ידי {interaction.user.mention} 🔒")
         button.disabled = True
         await interaction.message.edit(view=self)
-        await interaction.response.defer()
 
     @discord.ui.button(label="סגור פנייה ❌", style=discord.ButtonStyle.red, custom_id="ticket_close")
     async def close(self, interaction: discord.Interaction, button: Button):
+        await interaction.response.defer()
         if not interaction.user.get_role(ROLE_STAFF):
-            return await interaction.response.send_message("אין לך הרשאה לבצע פעולה זו.", ephemeral=True)
-        await interaction.response.send_message("החדר ייסגר בעוד 5 שניות...")
+            return await interaction.followup.send("אין לך הרשאה לבצע פעולה זו.", ephemeral=True)
+        await interaction.followup.send("החדר ייסגר בעוד 5 שניות...")
         await asyncio.sleep(5)
         await interaction.channel.delete()
 
     @discord.ui.button(label="שנה שם 📝", style=discord.ButtonStyle.grey, custom_id="ticket_rename")
     async def rename(self, interaction: discord.Interaction, button: Button):
+        await interaction.response.defer(ephemeral=True)
         if not interaction.user.get_role(ROLE_STAFF):
-            return await interaction.response.send_message("אין לך הרשאה לבצע פעולה זו.", ephemeral=True)
-
-        await interaction.response.send_message("אנא רשום את השם החדש לחדר בצ'אט:", ephemeral=True)
+            return await interaction.followup.send("אין לך הרשאה לבצע פעולה זו.", ephemeral=True)
+        
+        await interaction.followup.send("אנא רשום את השם החדש לחדר בצ'אט:", ephemeral=True)
         def check(m): return m.author == interaction.user and m.channel == interaction.channel
         try:
             msg = await bot.wait_for('message', check=check, timeout=30)
@@ -128,23 +128,24 @@ class TicketDropdown(Select):
         super().__init__(placeholder="בחר את קטגוריית הפנייה שלך... 🎫", options=options, custom_id="ticket_select")
 
     async def callback(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
         guild = interaction.guild
         category = guild.get_channel(CATEGORY_TICKETS)
-
+        
         ticket_channel = await guild.create_text_channel(
-            name=f"{self.values}-{interaction.user.name}",
+            name=f"{self.values[0]}-{interaction.user.name}",
             category=category
         )
-
+        
         await ticket_channel.set_permissions(guild.default_role, read_messages=False)
         await ticket_channel.set_permissions(interaction.user, read_messages=True, send_messages=True)
         await ticket_channel.set_permissions(guild.get_role(ROLE_STAFF), read_messages=True, send_messages=True)
-
-        await interaction.response.send_message(f"הפנייה שלך נפתחה בהצלחה! כנס לחדר: {ticket_channel.mention}", ephemeral=True)
-
+        
+        await interaction.followup.send(f"הפנייה שלך נפתחה בהצלחה! כנס לחדר: {ticket_channel.mention}", ephemeral=True)
+        
         embed = discord.Embed(
             title="פנייה חדשה בשרת 🎫",
-            description=f"שלום {interaction.user.mention}, תודה שפתחת פנייה בנושא **{self.values}**!\nצוות השרת קיבל התראה ויגיע לעזור בהקדם.",
+            description=f"שלום {interaction.user.mention}, תודה שפתחת פנייה בנושא **{self.values[0]}**!\nצוות השרת קיבל התראה ויגיע לעזור בהקדם.",
             color=discord.Color.orange()
         )
         await ticket_channel.send(embed=embed, view=TicketControls())
@@ -164,7 +165,6 @@ async def setup_tickets(ctx):
     )
     await ctx.send(embed=embed, view=TicketDropdownView())
 
-# --- 3. מערכת הגרלות (GIVEAWAYS) ---
 class GiveawayView(View):
     def __init__(self, message_id):
         super().__init__(timeout=None)
@@ -173,10 +173,11 @@ class GiveawayView(View):
 
     @discord.ui.button(label="הצטרף להגרלה 🎉", style=discord.ButtonStyle.green, custom_id="join_giveaway")
     async def join(self, interaction: discord.Interaction, button: Button):
+        await interaction.response.defer(ephemeral=True)
         if interaction.user.id in self.entrants:
-            return await interaction.response.send_message("אתה כבר רשום להגרלה זו!", ephemeral=True)
+            return await interaction.followup.send("אתה כבר רשום להגרלה זו!", ephemeral=True)
         self.entrants.append(interaction.user.id)
-        await interaction.response.send_message("נרשמת להגרלה בהצלחה! בהצלחה 🍀", ephemeral=True)
+        await interaction.followup.send("נרשמת להגרלה בהצלחה! בהצלחה 🍀", ephemeral=True)
 
 @bot.command()
 @commands.has_permissions(manage_messages=True)
@@ -191,9 +192,9 @@ async def giveaway(ctx, duration: int, winners: int, *, prize: str):
     msg = await channel.send(embed=embed, view=gv_view)
     gv_view.message_id = msg.id
     await ctx.send(f"ההגרלה פורסמה בהצלחה בערוץ {channel.mention}!")
-
+    
     await asyncio.sleep(duration * 60)
-
+    
     import random
     if len(gv_view.entrants) < winners:
         await channel.send(f"ההגרלה על **{prize}** מבוטלת עקב חוסר משתתפים.")
@@ -202,18 +203,17 @@ async def giveaway(ctx, duration: int, winners: int, *, prize: str):
         mentions = ", ".join([f"<@{w}>" for w in chosen_winners])
         await channel.send(f"🎉 מזל טוב לזוכים בהגרלה על **{prize}**: {mentions}! פנו לצוות לקבלת הפרס.")
 
-# --- 4. מערכת אזהרות (MODERATION & WARNINGS) ---
 @bot.command()
 @commands.has_permissions(manage_messages=True)
 async def warn(ctx, member: discord.Member, *, reason: str = "לא צוינה סיבה"):
     if member.id not in warnings_db:
         warnings_db[member.id] = []
     warnings_db[member.id].append(reason)
-
+    
     embed = discord.Embed(title="⚠️ קיבלת אזהרה בשרת", description=f"שרת: Chicago City\nסיבה: {reason}", color=discord.Color.red())
     try: await member.send(embed=embed)
     except: pass
-
+    
     await ctx.send(f"המשתמש {member.mention} הוזהר בהצלחה. (סה''כ אזהרות: {len(warnings_db[member.id])})")
 
 @bot.command()
@@ -230,16 +230,21 @@ async def unwarn(ctx, member: discord.Member):
     else:
         await ctx.send("למשתמש זה אין אזהרות פעילות.")
 
-# --- 5. פקודת SAY (ANNOUNCEMENTS) ---
 @bot.command()
 @commands.has_permissions(administrator=True)
-async def say(ctx, channel: discord.TextChannel, title: str, *, content: str):
-    embed = discord.Embed(title=title, description=content, color=discord.Color.blue(), timestamp=datetime.datetime.utcnow())
-    embed.set_footer(text="הנהלת Chicago City")
-    await channel.send(embed=embed)
-    await ctx.send(f"ההודעה נשלחה בהצלחה בערוץ {channel.mention}!")
+async def say(ctx, channel: discord.TextChannel, embed_keyword: str, *, content: str):
+    if embed_keyword.lower() == "embed":
+        embed = discord.Embed(description=content, color=discord.Color.blue(), timestamp=datetime.datetime.utcnow())
+        embed.set_footer(text="הנהלת Chicago City")
+        await channel.send(embed=embed)
+        await ctx.send(f"ההכרזה נשלחה בהצלחה בערוץ {channel.mention}!")
+    else:
+        full_text = f"{embed_keyword} {content}"
+        embed = discord.Embed(description=full_text, color=discord.Color.blue(), timestamp=datetime.datetime.utcnow())
+        embed.set_footer(text="הנהלת Chicago City")
+        await channel.send(embed=embed)
+        await ctx.send(f"ההכרזה נשלחה בהצלחה בערוץ {channel.mention}!")
 
-# --- 6. מערכת לוגים אוטומטית מלאה (AUTO AUDIT LOGS) ---
 async def send_log(event_name, embed):
     ch_id = LOG_CHANNELS.get(event_name)
     if ch_id:
@@ -298,7 +303,7 @@ async def on_message_delete(message):
 async def on_member_join(member):
     embed = discord.Embed(title="📥 משתמש חדש נכנס", description=f"משתמש: {member.mention}\nשם משתמש: {member.name}\nאיידי: {member.id}", color=discord.Color.green())
     await send_log("member_join", embed)
-
+    
     welcome_channel = bot.get_channel(LOG_CHANNELS["welcome_embed"])
     if welcome_channel:
         w_embed = discord.Embed(
@@ -320,7 +325,7 @@ async def on_member_join(member):
                 break
     except:
         inviter_text = "לא ניתן לעקוב (חוסר הרשאות)"
-
+            
     inv_embed = discord.Embed(title="🔗 לוג הזמנות (Invite Tracker)", description=f"המשתמש {member.mention} נכנס לשרת.\n**הוזמן על ידי:** {inviter_text}", color=discord.Color.magenta())
     await send_log("invite_tracker", inv_embed)
 
@@ -342,7 +347,4 @@ async def on_ready():
 
 keep_alive()
 
-import os
 bot.run(os.environ['DISCORD_TOKEN'])
-
-
