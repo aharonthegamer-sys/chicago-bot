@@ -72,14 +72,14 @@ class VerifyView(View):
 @commands.has_permissions(administrator=True)
 async def setup_verify(ctx):
     embed = discord.Embed(
-        title="מערכת אימות - Chicago City",
-        description="ברוכים הבאים לשרת הרשמי! לחצו על הכפתור הירוק למטה כדי להתאמת ולקבל גישה מלאה לשאר ערוצי השרת.",
-        color=discord.Color.blue()
+        title="🌐 GATEWAY SECURITY — CHICAGO CITY",
+        description="```🛠️ מנגנון אימות השחקנים הרשמי של השרת```\n\nלחצו על הכפתור הירוק למטה כדי לבצע סנכרון רשת, לקבל את רול התושב ולפתוח גישה מלאה לעיר!",
+        color=discord.Color.from_rgb(46, 204, 113)
     )
-    embed.set_footer(text="Chicago City Security")
+    embed.set_footer(text="Chicago City Audit System • Secure Connection", icon_url=ctx.guild.icon.url if ctx.guild.icon else None)
     await ctx.send(embed=embed, view=VerifyView())
 
-# --- מערכת טיקטים חדשה לחלוטין ויציבה (NEW TICKET SYSTEM) ---
+# --- מערכת טיקטים בעיצוב סייבר מתקדם ---
 class TicketControls(View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -89,8 +89,13 @@ class TicketControls(View):
         await interaction.response.defer()
         staff_role = interaction.guild.get_role(ROLE_STAFF)
         if staff_role not in interaction.user.roles and not interaction.user.guild_permissions.administrator:
-            return await interaction.followup.send("אין לך הרשאה לבצע פעולה זו.", ephemeral=True)
-        await interaction.channel.send(f"🔒 הפנייה נלקחה לטיפול על ידי {interaction.user.mention}")
+            return await interaction.followup.send("❌ פעולה חסומה. גישה לנציגי צוות בלבד.", ephemeral=True)
+        
+        embed = discord.Embed(
+            description=f"🔒 **הפנייה ננעלה ומטופלת כעת על ידי {interaction.user.mention}**",
+            color=discord.Color.blue()
+        )
+        await interaction.channel.send(embed=embed)
         button.disabled = True
         await interaction.message.edit(view=self)
 
@@ -99,8 +104,9 @@ class TicketControls(View):
         await interaction.response.defer()
         staff_role = interaction.guild.get_role(ROLE_STAFF)
         if staff_role not in interaction.user.roles and not interaction.user.guild_permissions.administrator:
-            return await interaction.followup.send("אין לך הרשאה לבצע פעולה זו.", ephemeral=True)
-        await interaction.channel.send("🚨 החדר ייסגר סופית ויימחק בעוד 5 שניות...")
+            return await interaction.followup.send("❌ פעולה חסומה. גישה לנציגי צוות בלבד.", ephemeral=True)
+        
+        await interaction.channel.send("🚧 **פרוטוקול סגירה הופעל. החדר יימחק לצמיתות בעוד 5 שניות...**")
         await asyncio.sleep(5)
         await interaction.channel.delete()
 
@@ -108,36 +114,34 @@ class TicketControls(View):
     async def rename(self, interaction: discord.Interaction, button: Button):
         staff_role = interaction.guild.get_role(ROLE_STAFF)
         if staff_role not in interaction.user.roles and not interaction.user.guild_permissions.administrator:
-            return await interaction.response.send_message("אין לך הרשאה לבצע פעולה זו.", ephemeral=True)
+            return await interaction.response.send_message("❌ פעולה חסומה. גישה לנציגי צוות בלבד.", ephemeral=True)
         
-        await interaction.response.send_message("אנא רשום את השם החדש לחדר בצ'אט:", ephemeral=True)
+        await interaction.response.send_message("⚙️ אנא הקלד את השם החדש לערוץ הטיקט בצ'אט:", ephemeral=True)
         def check(m): return m.author == interaction.user and m.channel == interaction.channel
         try:
             msg = await bot.wait_for('message', check=check, timeout=30)
             await interaction.channel.edit(name=f"ticket-{msg.content}")
-            await interaction.channel.send(f"✅ שם החדר שונה בהצלחה ל: {msg.content}")
+            await interaction.channel.send(f"✅ שם הערוץ שונה בהצלחה ל: `ticket-{msg.content}`")
         except asyncio.TimeoutError:
-            await interaction.channel.send("❌ הזמן לשינוי השם עבר.")
+            await interaction.channel.send("❌ הזמן הקצוב לעריכת השם פג.")
 
 class TicketDropdown(Select):
     def __init__(self):
         options = [
-            discord.SelectOption(label="בחינה לצוות", emoji="📝", value="צוות"),
-            discord.SelectOption(label="דיווח על שחקן / צוות", emoji="🚫", value="דיווח"),
-            discord.SelectOption(label="דיווח על באג", emoji="🐛", value="באג"),
-            discord.SelectOption(label="שאלה כללית", emoji="❓", value="כללי")
+            discord.SelectOption(label="בחינה לצוות השרת", emoji="📝", value="בחינה לצוות"),
+            discord.SelectOption(label="דיווח על שחקן / חבר צוות", emoji="🚫", value="דיווח שחקן"),
+            discord.SelectOption(label="דיווח על באג / תקלה טכנית", emoji="🐛", value="דיווח באג"),
+            discord.SelectOption(label="שאלה כללית / עזרה מההנהלה", emoji="❓", value="פנייה כללית")
         ]
-        super().__init__(placeholder="בחר את קטגוריית הפנייה שלך... 🎫", options=options, custom_id="tk_select")
+        super().__init__(placeholder="📂 בחר את נושא הפנייה לפתיחת כרטיס תמיכה...", options=options, custom_id="tk_select")
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
         guild = interaction.guild
-        
-        # פתרון קסם: פותח את הטיקט בתוך הקטגוריה שבה נמצא חדר הפתיחה הנוכחי!
         current_category = interaction.channel.category
         
         ticket_channel = await guild.create_text_channel(
-            name=f"{self.values[0]}-{interaction.user.name}",
+            name=f"ticket-{interaction.user.name}",
             category=current_category
         )
         
@@ -145,15 +149,25 @@ class TicketDropdown(Select):
         await ticket_channel.set_permissions(interaction.user, read_messages=True, send_messages=True)
         await ticket_channel.set_permissions(guild.get_role(ROLE_STAFF), read_messages=True, send_messages=True)
         
-        await interaction.followup.send(f"✅ הפנייה שלך נפתחה בהצלחה! כנס לחדר: {ticket_channel.mention}", ephemeral=True)
+        await interaction.followup.send(f"✅ כרטיס התמיכה שלך נוצר בהצלחה! כנס לחדר: {ticket_channel.mention}", ephemeral=True)
         
+        # הודעת מעוצבת סייבר מקצועית בתוך הטיקט
         embed = discord.Embed(
-            title="🎫 פנייה חדשה — Chicago City",
-            description=f"שלום {interaction.user.mention},\nתודה שפתחת פנייה בנושא **{self.values[0]}**!\nצוות השרת קיבל התראה ויגיע לעזור בהקדם.\n\nניתן להשתמש בכפתורים למטה לניהול הטיקט:",
-            color=discord.Color.red()
+            title="📥 CONTROL PANEL — TICKET OPENED",
+            description=f"ברוך הבא למרכז התמיכה של **Chicago City**.\nנפתח עבורך חדר תמיכה רשמי בנושא המבוקש.",
+            color=discord.Color.from_rgb(231, 76, 60),
+            timestamp=datetime.datetime.utcnow()
         )
-        embed.set_footer(text="Chicago City Ticket System")
+        embed.add_field(name="👤 יוצר הפנייה", value=interaction.user.mention, inline=True)
+        embed.add_field(name="📂 מחלקה מבוקשת", value=f"`{self.values}`", inline=True)
+        embed.add_field(name="🔒 סטטוס מערכת", value="`ממתין לנציג צוות`", inline=False)
+        embed.set_footer(text="Chicago City Core • Secure Support Environment")
+        
         await ticket_channel.send(embed=embed, view=TicketControls())
+        
+        # תיוג שקט ומהיר של הצוות (Ping) ומחיקה מיידית
+        ping_msg = await ticket_channel.send(f"<@&{ROLE_STAFF}>")
+        await ping_msg.delete()
 
 class TicketDropdownView(View):
     def __init__(self):
@@ -164,11 +178,12 @@ class TicketDropdownView(View):
 @commands.has_permissions(administrator=True)
 async def setup_tickets(ctx):
     embed = discord.Embed(
-        title="מערכת פניות ותמיכה — Chicago City 🎫",
-        description="צריך עזרה או רוצה לפתוח פנייה רשמית לצוות השרת?\nבחרו את הנושא המדויק מתוך התפריט הנפתח למטה והחדר שלכם ייפתח בשנייה!",
-        color=discord.Color.red()
+        title="🎫 CENTRAL SUPPORT DESK — CHICAGO CITY",
+        description="```📊 מערכת ניהול הפניות והתמיכה של השרת```\n\nצריכים עזרה, רוצים לדווח על באג או להגיש מועמדות לצוות הניהול?\n\n**בחר את המחלקה המתאימה בתפריט למטה והבוט יפתח עבורך חדר מאובטח מול הצוות!**",
+        color=discord.Color.from_rgb(155, 89, 182)
     )
     embed.set_image(url="https://discordapp.net")
+    embed.set_footer(text="Chicago City Support Operations", icon_url=ctx.guild.icon.url if ctx.guild.icon else None)
     await ctx.send(embed=embed, view=TicketDropdownView())
 
 # הגרלות (GIVEAWAYS)
