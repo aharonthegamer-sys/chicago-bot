@@ -30,7 +30,6 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 # איידיז נעולים וסופיים של CHICAGO CITY
 ROLE_VERIFIED = 1483039214793789489
-CATEGORY_TICKETS = 1483039218954534966 # האיידי המדויק ששלחת!
 ROLE_STAFF = 1483039215364345930
 CHANNEL_GIVEAWAY = 1483039216366780532
 
@@ -80,78 +79,80 @@ async def setup_verify(ctx):
     embed.set_footer(text="Chicago City Security")
     await ctx.send(embed=embed, view=VerifyView())
 
-# מערכת טיקטים (TICKETS)
+# --- מערכת טיקטים חדשה לחלוטין ויציבה (NEW TICKET SYSTEM) ---
 class TicketControls(View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    @discord.ui.button(label="קח טיפול 🙋‍♂️", style=discord.ButtonStyle.blurple, custom_id="ticket_claim")
+    @discord.ui.button(label="קח טיפול 🙋‍♂️", style=discord.ButtonStyle.blurple, custom_id="tk_claim")
     async def claim(self, interaction: discord.Interaction, button: Button):
         await interaction.response.defer()
-        if not interaction.user.get_role(ROLE_STAFF):
+        staff_role = interaction.guild.get_role(ROLE_STAFF)
+        if staff_role not in interaction.user.roles and not interaction.user.guild_permissions.administrator:
             return await interaction.followup.send("אין לך הרשאה לבצע פעולה זו.", ephemeral=True)
-        await interaction.channel.send(f"הפנייה נלקחה לטיפול על ידי {interaction.user.mention} 🔒")
+        await interaction.channel.send(f"🔒 הפנייה נלקחה לטיפול על ידי {interaction.user.mention}")
         button.disabled = True
         await interaction.message.edit(view=self)
 
-    @discord.ui.button(label="סגור פנייה ❌", style=discord.ButtonStyle.red, custom_id="ticket_close")
+    @discord.ui.button(label="סגור פנייה ❌", style=discord.ButtonStyle.red, custom_id="tk_close")
     async def close(self, interaction: discord.Interaction, button: Button):
         await interaction.response.defer()
-        if not interaction.user.get_role(ROLE_STAFF):
+        staff_role = interaction.guild.get_role(ROLE_STAFF)
+        if staff_role not in interaction.user.roles and not interaction.user.guild_permissions.administrator:
             return await interaction.followup.send("אין לך הרשאה לבצע פעולה זו.", ephemeral=True)
-        await interaction.followup.send("החדר ייסגר בעוד 5 שניות...")
+        await interaction.channel.send("🚨 החדר ייסגר סופית ויימחק בעוד 5 שניות...")
         await asyncio.sleep(5)
         await interaction.channel.delete()
 
-    @discord.ui.button(label="שנה שם 📝", style=discord.ButtonStyle.grey, custom_id="ticket_rename")
+    @discord.ui.button(label="שנה שם 📝", style=discord.ButtonStyle.grey, custom_id="tk_rename")
     async def rename(self, interaction: discord.Interaction, button: Button):
-        await interaction.response.defer(ephemeral=True)
-        if not interaction.user.get_role(ROLE_STAFF):
-            return await interaction.followup.send("אין לך הרשאה לבצע פעולה זו.", ephemeral=True)
+        staff_role = interaction.guild.get_role(ROLE_STAFF)
+        if staff_role not in interaction.user.roles and not interaction.user.guild_permissions.administrator:
+            return await interaction.response.send_message("אין לך הרשאה לבצע פעולה זו.", ephemeral=True)
         
-        await interaction.followup.send("אנא רשום את השם החדש לחדר בצ'אט:", ephemeral=True)
+        await interaction.response.send_message("אנא רשום את השם החדש לחדר בצ'אט:", ephemeral=True)
         def check(m): return m.author == interaction.user and m.channel == interaction.channel
         try:
             msg = await bot.wait_for('message', check=check, timeout=30)
             await interaction.channel.edit(name=f"ticket-{msg.content}")
-            await interaction.channel.send(f"שם החדר שונה בהצלחה ל: {msg.content}")
+            await interaction.channel.send(f"✅ שם החדר שונה בהצלחה ל: {msg.content}")
         except asyncio.TimeoutError:
-            await interaction.channel.send("הזמן לשינוי השם עבר.")
+            await interaction.channel.send("❌ הזמן לשינוי השם עבר.")
 
 class TicketDropdown(Select):
     def __init__(self):
         options = [
-            discord.SelectOption(label="בחינה לצוות", emoji="📝", description="הגשת מועמדות לצוות השרת"),
-            discord.SelectOption(label="דיווח על שחקן / צוות", emoji="🚫", description="דיווח על הפרת חוקים בשרת"),
-            discord.SelectOption(label="דיווח על באג", emoji="🐛", description="דיווח על תקלה במערכות"),
-            discord.SelectOption(label="שאלה כללית", emoji="❓", description="עזרה ופניות כלליות אחרות")
+            discord.SelectOption(label="בחינה לצוות", emoji="📝", value="צוות"),
+            discord.SelectOption(label="דיווח על שחקן / צוות", emoji="🚫", value="דיווח"),
+            discord.SelectOption(label="דיווח על באג", emoji="🐛", value="באג"),
+            discord.SelectOption(label="שאלה כללית", emoji="❓", value="כללי")
         ]
-        super().__init__(placeholder="בחר את קטגוריית הפנייה שלך... 🎫", options=options, custom_id="ticket_select")
+        super().__init__(placeholder="בחר את קטגוריית הפנייה שלך... 🎫", options=options, custom_id="tk_select")
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
         guild = interaction.guild
-        category = guild.get_channel(CATEGORY_TICKETS)
         
-        if not category:
-            return await interaction.followup.send("שגיאה: קטגוריית הטיקטים לא נמצאה בשרת. ודא שהקטגוריה קיימת.", ephemeral=True)
-            
+        # פתרון קסם: פותח את הטיקט בתוך הקטגוריה שבה נמצא חדר הפתיחה הנוכחי!
+        current_category = interaction.channel.category
+        
         ticket_channel = await guild.create_text_channel(
-            name=f"{self.values}-{interaction.user.name}",
-            category=category
+            name=f"{self.values[0]}-{interaction.user.name}",
+            category=current_category
         )
         
         await ticket_channel.set_permissions(guild.default_role, read_messages=False)
         await ticket_channel.set_permissions(interaction.user, read_messages=True, send_messages=True)
         await ticket_channel.set_permissions(guild.get_role(ROLE_STAFF), read_messages=True, send_messages=True)
         
-        await interaction.followup.send(f"הפנייה שלך נפתחה בהצלחה! כנס לחדר: {ticket_channel.mention}", ephemeral=True)
+        await interaction.followup.send(f"✅ הפנייה שלך נפתחה בהצלחה! כנס לחדר: {ticket_channel.mention}", ephemeral=True)
         
         embed = discord.Embed(
-            title="פנייה חדשה בשרת 🎫",
-            description=f"שלום {interaction.user.mention}, תודה שפתחת פנייה בנושא **{self.values}**!\nצוות השרת קיבל התראה ויגיע לעזור בהקדם.",
-            color=discord.Color.orange()
+            title="🎫 פנייה חדשה — Chicago City",
+            description=f"שלום {interaction.user.mention},\nתודה שפתחת פנייה בנושא **{self.values[0]}**!\nצוות השרת קיבל התראה ויגיע לעזור בהקדם.\n\nניתן להשתמש בכפתורים למטה לניהול הטיקט:",
+            color=discord.Color.red()
         )
+        embed.set_footer(text="Chicago City Ticket System")
         await ticket_channel.send(embed=embed, view=TicketControls())
 
 class TicketDropdownView(View):
@@ -163,10 +164,11 @@ class TicketDropdownView(View):
 @commands.has_permissions(administrator=True)
 async def setup_tickets(ctx):
     embed = discord.Embed(
-        title="מערכת פניות ותמיכה - Chicago City 🎫",
-        description="צריך עזרה או רוצה לפתוח פנייה לצוות? בחרו את הנושא המדויק מתוך התפריט הנפתח למטה.",
-        color=discord.Color.purple()
+        title="מערכת פניות ותמיכה — Chicago City 🎫",
+        description="צריך עזרה או רוצה לפתוח פנייה רשמית לצוות השרת?\nבחרו את הנושא המדויק מתוך התפריט הנפתח למטה והחדר שלכם ייפתח בשנייה!",
+        color=discord.Color.red()
     )
+    embed.set_image(url="https://discordapp.net")
     await ctx.send(embed=embed, view=TicketDropdownView())
 
 # הגרלות (GIVEAWAYS)
@@ -314,21 +316,17 @@ async def on_member_join(member):
     
     welcome_channel = bot.get_channel(LOG_CHANNELS["welcome_embed"])
     if welcome_channel:
-        # עיצוב הוולקם המבוקש!
         w_embed = discord.Embed(
             title=f"🎉 ברוך הבא ל-Chicago City, {member.name}! 🎉",
             description=f"שמחים שהצטרפת אלינו! כנס לערוץ האימות כדי לקבל גישה מלאה לשרת: <#{ROLE_VERIFIED}> 🛡️",
             color=discord.Color.red(),
             timestamp=datetime.datetime.utcnow()
         )
-        # תמונת הפרופיל של מי שנכנס בצד ימין למעלה (Thumbnail)
         w_embed.set_thumbnail(url=member.display_avatar.url)
-        # תמונת הלוגו הגדולה שביקשת למטה!
         w_embed.set_image(url="https://discordapp.net")
         w_embed.set_footer(text="Chicago City System Welcome")
         await welcome_channel.send(embed=w_embed)
 
-    # מערכת אינוויט טראקר מעוצבת ומשודרגת פה!
     invites_before = invites_cache.get(member.guild.id, {})
     try:
         invites_after = await member.guild.invites()
