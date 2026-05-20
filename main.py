@@ -28,6 +28,7 @@ intents.messages = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
+# איידיז של CHICAGO CITY
 ROLE_VERIFIED = 1483039214793789489
 CATEGORY_TICKETS = 1483039218954534966
 ROLE_STAFF = 1483039215364345930
@@ -53,14 +54,14 @@ LOG_CHANNELS = {
 warnings_db = {}
 invites_cache = {}
 
-# תיקון אינטראקציות למערכת אימות
+# מערכת אימות (VERIFICATION)
 class VerifyView(View):
     def __init__(self):
         super().__init__(timeout=None)
 
     @discord.ui.button(label="התאמת עכשיו 🛡️", style=discord.ButtonStyle.green, custom_id="verify_btn")
     async def verify_button(self, interaction: discord.Interaction, button: Button):
-        await interaction.response.defer(ephemeral=True) # תיקון קריסה ב-Render
+        await interaction.response.defer(ephemeral=True)
         role = interaction.guild.get_role(ROLE_VERIFIED)
         if role in interaction.user.roles:
             await interaction.followup.send("אתה כבר מאומת בשרת!", ephemeral=True)
@@ -79,7 +80,7 @@ async def setup_verify(ctx):
     embed.set_footer(text="Chicago City Security")
     await ctx.send(embed=embed, view=VerifyView())
 
-# תיקון אינטראקציות למערכת טיקטים
+# מערכת טיקטים (TICKETS)
 class TicketControls(View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -133,7 +134,7 @@ class TicketDropdown(Select):
         category = guild.get_channel(CATEGORY_TICKETS)
         
         ticket_channel = await guild.create_text_channel(
-            name=f"{self.values[0]}-{interaction.user.name}",
+            name=f"{self.values}-{interaction.user.name}",
             category=category
         )
         
@@ -145,7 +146,7 @@ class TicketDropdown(Select):
         
         embed = discord.Embed(
             title="פנייה חדשה בשרת 🎫",
-            description=f"שלום {interaction.user.mention}, תודה שפתחת פנייה בנושא **{self.values[0]}**!\nצוות השרת קיבל התראה ויגיע לעזור בהקדם.",
+            description=f"שלום {interaction.user.mention}, תודה שפתחת פנייה בנושא **{self.values}**!\nצוות השרת קיבל התראה ויגיע לעזור בהקדם.",
             color=discord.Color.orange()
         )
         await ticket_channel.send(embed=embed, view=TicketControls())
@@ -165,6 +166,7 @@ async def setup_tickets(ctx):
     )
     await ctx.send(embed=embed, view=TicketDropdownView())
 
+# הגרלות (GIVEAWAYS)
 class GiveawayView(View):
     def __init__(self, message_id):
         super().__init__(timeout=None)
@@ -203,6 +205,7 @@ async def giveaway(ctx, duration: int, winners: int, *, prize: str):
         mentions = ", ".join([f"<@{w}>" for w in chosen_winners])
         await channel.send(f"🎉 מזל טוב לזוכים בהגרלה על **{prize}**: {mentions}! פנו לצוות לקבלת הפרס.")
 
+# אזהרות (MODERATION)
 @bot.command()
 @commands.has_permissions(manage_messages=True)
 async def warn(ctx, member: discord.Member, *, reason: str = "לא צוינה סיבה"):
@@ -230,6 +233,7 @@ async def unwarn(ctx, member: discord.Member):
     else:
         await ctx.send("למשתמש זה אין אזהרות פעילות.")
 
+# כריזה (ANNOUNCEMENTS)
 @bot.command()
 @commands.has_permissions(administrator=True)
 async def say(ctx, channel: discord.TextChannel, embed_keyword: str, *, content: str):
@@ -245,6 +249,7 @@ async def say(ctx, channel: discord.TextChannel, embed_keyword: str, *, content:
         await channel.send(embed=embed)
         await ctx.send(f"ההכרזה נשלחה בהצלחה בערוץ {channel.mention}!")
 
+# לוגים (AUDIT LOGS)
 async def send_log(event_name, embed):
     ch_id = LOG_CHANNELS.get(event_name)
     if ch_id:
@@ -307,26 +312,47 @@ async def on_member_join(member):
     welcome_channel = bot.get_channel(LOG_CHANNELS["welcome_embed"])
     if welcome_channel:
         w_embed = discord.Embed(
-            title=f"ברוך הבא ל-Chicago City, {member.name}! 🎉",
-            description=f"שמחים שהצטרפת אלינו! כנס לערוץ האימות כדי לקבל גישה לשרת. <#{ROLE_VERIFIED}>",
-            color=discord.Color.green()
+            title=f"🎉 ברוך הבא ל-Chicago City, {member.name}! 🎉",
+            description=f"שמחים שהצטרפת אלינו! כנס לערוץ האימות כדי לקבל גישה מלאה לשרת: <#{ROLE_VERIFIED}> 🛡️",
+            color=discord.Color.red()
         )
-        w_embed.set_image(url="https://discordapp.com")
+        if member.guild.icon:
+            w_embed.set_thumbnail(url=member.guild.icon.url)
+            w_embed.set_image(url=member.guild.icon.url)
+        
         await welcome_channel.send(embed=w_embed)
 
+    # מערכת אינוויט טראקר (Invite Tracker) מעוצבת ומשודרגת מטורף!
     invites_before = invites_cache.get(member.guild.id, {})
     try:
         invites_after = await member.guild.invites()
         invites_cache[member.guild.id] = {invite.code: invite.uses for invite in invites_after}
         inviter_text = "לא נמצא (או קישור קבוע)"
+        code_text = "אין קוד"
+        uses_text = "0"
+        
         for invite in invites_after:
             if invite.code in invites_before and invite.uses > invites_before[invite.code]:
-                inviter_text = f"{invite.inviter.mention} (קוד: `{invite.code}`, שימושים: `{invite.uses}`)"
+                inviter_text = f"{invite.inviter.mention}"
+                code_text = f"`{invite.code}`"
+                uses_text = f"`{invite.uses}`"
                 break
     except:
-        inviter_text = "לא ניתן לעקוב (חוסר הרשאות)"
+        inviter_text = "חוסר הרשאות לעקוב"
+        code_text = "שגיאה"
+        uses_text = "שגיאה"
             
-    inv_embed = discord.Embed(title="🔗 לוג הזמנות (Invite Tracker)", description=f"המשתמש {member.mention} נכנס לשרת.\n**הוזמן על ידי:** {inviter_text}", color=discord.Color.magenta())
+    inv_embed = discord.Embed(
+        title="🔗 לוג הזמנות חדש — Invite Tracker", 
+        description=f"המשתמש {member.mention} נכנס לשרת הרשמי של Chicago City! 🎉", 
+        color=discord.Color.magenta(),
+        timestamp=datetime.datetime.utcnow()
+    )
+    inv_embed.add_field(name="👤 הוזמן על ידי:", value=inviter_text, inline=True)
+    inv_embed.add_field(name="🔑 קוד הזמנה:", value=code_text, inline=True)
+    inv_embed.add_field(name="📊 סך הכל שימושים בקוד:", value=uses_text, inline=True)
+    inv_embed.set_footer(text="Chicago City System Tracking")
+    
     await send_log("invite_tracker", inv_embed)
 
 @bot.event
