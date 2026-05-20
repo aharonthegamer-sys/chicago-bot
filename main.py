@@ -343,5 +343,6 @@ async def on_ready():
 keep_alive()
 
 import os
-bot.run("MTUwNjY4NjU0MDYxNTY0NzMwMg.GA9YM5.DnWqsmIY24edax1Cx4m2DvbsKlUFLseZxKTW-A")
+bot.run(os.environ['DISCORD_TOKEN'])
+
 
