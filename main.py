@@ -28,9 +28,9 @@ intents.messages = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# איידיז של CHICAGO CITY
+# איידיז נעולים וסופיים של CHICAGO CITY
 ROLE_VERIFIED = 1483039214793789489
-CATEGORY_TICKETS = 1483039218954534966
+CATEGORY_TICKETS = 1483039218954534966 # האיידי המדויק ששלחת!
 ROLE_STAFF = 1483039215364345930
 CHANNEL_GIVEAWAY = 1483039216366780532
 
@@ -133,6 +133,9 @@ class TicketDropdown(Select):
         guild = interaction.guild
         category = guild.get_channel(CATEGORY_TICKETS)
         
+        if not category:
+            return await interaction.followup.send("שגיאה: קטגוריית הטיקטים לא נמצאה בשרת. ודא שהקטגוריה קיימת.", ephemeral=True)
+            
         ticket_channel = await guild.create_text_channel(
             name=f"{self.values}-{interaction.user.name}",
             category=category
@@ -311,18 +314,21 @@ async def on_member_join(member):
     
     welcome_channel = bot.get_channel(LOG_CHANNELS["welcome_embed"])
     if welcome_channel:
+        # עיצוב הוולקם המבוקש!
         w_embed = discord.Embed(
             title=f"🎉 ברוך הבא ל-Chicago City, {member.name}! 🎉",
             description=f"שמחים שהצטרפת אלינו! כנס לערוץ האימות כדי לקבל גישה מלאה לשרת: <#{ROLE_VERIFIED}> 🛡️",
-            color=discord.Color.red()
+            color=discord.Color.red(),
+            timestamp=datetime.datetime.utcnow()
         )
-        if member.guild.icon:
-            w_embed.set_thumbnail(url=member.guild.icon.url)
-            w_embed.set_image(url=member.guild.icon.url)
-        
+        # תמונת הפרופיל של מי שנכנס בצד ימין למעלה (Thumbnail)
+        w_embed.set_thumbnail(url=member.display_avatar.url)
+        # תמונת הלוגו הגדולה שביקשת למטה!
+        w_embed.set_image(url="https://discordapp.net")
+        w_embed.set_footer(text="Chicago City System Welcome")
         await welcome_channel.send(embed=w_embed)
 
-    # מערכת אינוויט טראקר (Invite Tracker) מעוצבת ומשודרגת מטורף!
+    # מערכת אינוויט טראקר מעוצבת ומשודרגת פה!
     invites_before = invites_cache.get(member.guild.id, {})
     try:
         invites_after = await member.guild.invites()
