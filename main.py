@@ -343,5 +343,5 @@ async def on_ready():
 keep_alive()
 
 import os
-bot.run("MTUwNjY4NjU0MDYxNTY0NzMwMg.GMonfY.Nmcso5z0IZkujxEpQGudrB1GO0umAXs9NUdk5g")
+bot.run("MTUwNjY4NjU0MDYxNTY0NzMwMg.GA9YM5.DnWqsmIY24edax1Cx4m2DvbsKlUFLseZxKTW-A")
 
