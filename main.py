@@ -103,7 +103,7 @@ class TicketControls(View):
         try:
             msg = await bot.wait_for('message', check=check, timeout=30)
             if msg.mentions:
-                target = msg.mentions[0]
+                target = msg.mentions
                 await interaction.channel.set_permissions(target, read_messages=True, send_messages=True)
                 await interaction.channel.send(f"🎉 **המערכת הכניסה בהצלחה את** {target.mention} **לתוך חדר התמיכה!** ✅")
             else: await interaction.channel.send("❌ שגיאה: לא תייגת משתמש תקין.")
@@ -301,7 +301,7 @@ class WarnPanelView(View):
     @discord.ui.button(label="📊 כמות ווארנים בתיק", style=discord.ButtonStyle.grey, custom_id="wp_view")
     async def view_warn_btn(self, interaction: discord.Interaction, button: Button):
         if interaction.guild.get_role(ROLE_WARN_ADMIN) not in interaction.user.roles and not interaction.user.guild_permissions.administrator:
-            return await interaction.response.send_message("❌ אבטחה: מיוedited למפקח ניהול עליון בלבד!", ephemeral=True)
+            return await interaction.response.send_message("❌ אבטחה: מיועד לדרג ניהול עליון בלבד!", ephemeral=True)
         view = View().add_item(WarnUserSelect("view"))
         await interaction.response.send_message("⚙️ **בחרו חבר צוות מהרשימה למטה כדי לבדוק את כמות האזהרות שלו:**", view=view, ephemeral=True)
 
