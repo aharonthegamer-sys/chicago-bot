@@ -24,7 +24,6 @@ CHANNEL_STAFF_WARNS_LOG = 1483039219336347810
 CHANNEL_FIVEM_STATUS = 1506965475270332476 
 CHANNEL_TICKET_LOGS = 1483039219654852612
 CFX_ID = "rmadb7p"
-FIVEM_IP = "135.148.36.192:30125"
 
 LOG_CHANNELS = {
     "channel_create": 1483039219654852617, "channel_delete": 1483039219654852616,
@@ -64,7 +63,7 @@ async def setup_verify(ctx):
     if ctx.guild.icon: embed.set_image(url=ctx.guild.icon.url)
     await ctx.send(embed=embed, view=VerifyView())
 
-# מערכת טיקטים עם 4 כפתורי ניהול לצוות
+# מערכת טיקטים עם 4 כפתורי ניהול לצוות (תוקן!)
 class TicketControls(View):
     def __init__(self): super().__init__(timeout=None)
     
@@ -134,9 +133,9 @@ class TicketDropdown(Select):
         await interaction.followup.send(f"✅ הטיקט נוצר! כנס לחדר: {ticket_channel.mention}", ephemeral=True)
         
         log_ch = bot.get_channel(CHANNEL_TICKET_LOGS)
-        if log_ch: await log_ch.send(embed=discord.Embed(title="Chicago City", description=f"➕ **טיקט חדש נפתח**\n\n• פותח הפנייה: {interaction.user.mention}\n• נושא: `{self.values}`\n• חדר: {ticket_channel.mention}", color=discord.Color.green()))
+        if log_ch: await log_ch.send(embed=discord.Embed(title="Chicago City", description=f"➕ **טיקט חדש נפתח**\n\n• פותח הפנייה: {interaction.user.mention}\n• נושא: `{self.values[0]}`\n• חדר: {ticket_channel.mention}", color=discord.Color.green()))
             
-        embed = discord.Embed(title="Chicago City", description=f"שלום {interaction.user.mention}, פנייתך בנושא `{self.values}` התקבלה!\nצוות השרת יגיע בהקדם.", color=discord.Color.red())
+        embed = discord.Embed(title="Chicago City", description=f"שלום {interaction.user.mention}, פנייתך בנושא `{self.values[0]}` התקבלה!\nצוות השרת יגיע בהקדם.", color=discord.Color.red())
         embed.set_footer(text="Chicago City")
         if interaction.guild.icon: embed.set_image(url=interaction.guild.icon.url)
         await ticket_channel.send(embed=embed, view=TicketControls())
@@ -267,7 +266,7 @@ class FiveMConnectView(View):
         super().__init__(timeout=None)
         self.add_item(discord.ui.Button(label="התחברות ישירה לעיר 🚀", style=discord.ButtonStyle.link, url="https://cfx.re"))
 
-# --- משימת הסטטוס ההיברידית והחסינה ב-1000% ---
+# משימת הסטטוס המאוחדת – פונה לשרת FiveM של דיסקורד ישירות
 @tasks.loop(minutes=2)
 async def update_fivem_status():
     global fivem_msg_id
@@ -280,30 +279,53 @@ async def update_fivem_status():
     staff_role = guild.get_role(ROLE_STAFF)
     staff_dc_online = sum(1 for m in staff_role.members if m.status != discord.Status.offline and not m.bot) if staff_role else 0
 
-    # ברירת מחדל חכמה: מכיוון שהכפתור עובד והשרת שלכם פתוח, הסטטוס יציג "מקוון" אלא אם הוכח אחרת!
-    status_str, players_str, staff_str, color = "🟢 מקוון (Online)", "פעיל לחלוטין 👥", "צוות זמין בעיר 🛡️", discord.Color.green()
+    status_str, players_str, staff_str, color = "🔴 מנותק (Offline)", "0 / 0", "0 מחוברים", discord.Color.red()
     
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
     async with aiohttp.ClientSession(headers=headers) as session:
-        # ניסיון נתיב א׳: פנייה ישירה ל-IP
         try:
-            async with session.get(f"http://{FIVEM_IP}/players.json", timeout=3) as resp:
-                if resp.status == 200:
-                    players_data = await resp.json()
-                    players_str = f"{len(players_data)} / 64"
-                    fivem_identifiers = [int(i.replace('discord:', '')) for p in players_data for i in p.get('identifiers', []) if i.startswith('discord:')]
-                    staff_game_count = sum(1 for m in staff_role.members if m.id in fivem_identifiers) if staff_role else 0
-                    staff_str = f"{staff_game_count} אנשי צוות בעיר"
-                    return await update_embed_msg(ch, guild, color, status_str, players_str, staff_str, total_dc_members, online_dc_users, staff_dc_online)
-        except: pass
-
-        # ניסיון נתיב ב׳: פנייה דרך Cfx API
-        try:
-            async with session.get(f"https://fivem.net{CFX_ID}", timeout=3) as resp:
+            async with session.get(f"https://fivem.net{CFX_ID}", timeout=5) as resp:
                 if resp.status == 200:
                     data = await resp.json()
                     server_data = data.get("Data", {})
+                    status_str = "🟢 מקוון (Online)"
+                    color = discord.Color.green()
                     players_list = server_data.get("players", [])
                     players_str = f"{len(players_list)} / {server_data.get('sv_maxclients', 64)}"
-                    fivem_identifiers = [int(i.replace('discord:', '')) for p in players_list for i in p.get('identifiers', []) if i.startswith('discord:')]
-                    staff_game
+                    fivem_identifiers = []
+                    for player in players_list:
+                        for identifier in player.get('identifiers', []):
+                            if identifier.startswith('discord:'):
+                                fivem_identifiers.append(int(identifier.replace('discord:', '')))
+                    staff_game_count = sum(1 for m in staff_role.members if m.id in fivem_identifiers) if staff_role else 0
+                    staff_str = f"{staff_game_count} אנשי צוות בעיר"
+                else:
+                    print(f"[FiveM API] Error code: {resp.status}")
+        except Exception as e:
+            print(f"[FiveM API] Connection error: {e}")
+
+    embed = discord.Embed(title="Chicago City — Status", color=color, timestamp=datetime.datetime.utcnow())
+    embed.add_field(name="🎮 FIVEM STATUS", value=f"• סטטוס השרת: `{status_str}`\n• שחקנים בעיר: `{players_str}`\n• צוות בתוך העיר: `{staff_str}`", inline=False)
+    embed.add_field(name="💬 DISCORD STATUS", value=f"• סך הכל תושבים: `{total_dc_members} אזרחים`\n• משתמשים אונליין: `{online_dc_users} מחוברים`\n• אנשי צוות אונליין: `{staff_dc_online} זמינים`", inline=False)
+    embed.set_footer(text="Chicago City • ערוץ סטטוס רשמי")
+    if guild.icon: embed.set_thumbnail(url=guild.icon.url)
+
+    try:
+        if fivem_msg_id is None:
+            async for m in ch.history(limit=5):
+                if m.author == bot.user and m.embeds and m.embeds.title == "Chicago City — Status":
+                    fivem_msg_id = m.id; await m.edit(embed=embed, view=FiveMConnectView()); return
+            msg = await ch.send(embed=embed, view=FiveMConnectView())
+            fivem_msg_id = msg.id
+        else:
+            msg = await ch.fetch_message(fivem_msg_id)
+            await msg.edit(embed=embed, view=FiveMConnectView())
+    except: fivem_msg_id = None
+
+@bot.event
+async def on_ready():
+    print(f"Logged in as {bot.user.name}")
+    if not update_fivem_status.is_running(): update_fivem_status.start()
+
+keep_alive()
+bot.run(os.environ['DISCORD_TOKEN'])
