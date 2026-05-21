@@ -26,11 +26,11 @@ intents.message_content = True
 intents.members = True
 intents.guilds = True
 intents.messages = True
-intents.presences = True  # חובה בשביל לספור מחוברים ואנשי צוות אונליין!
+intents.presences = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# איידיז נעולים וסופיים של CHICAGO CITY
+# איידיז נעולים של CHICAGO CITY
 ROLE_VERIFIED = 1483039214793789489
 ROLE_STAFF = 1483039215364345930
 CHANNEL_GIVEAWAY = 1483039216366780532
@@ -52,6 +52,9 @@ LOG_CHANNELS = {
 
 warnings_db = {}
 invites_cache = {}
+
+# קישור ללוגו המעוצב של השרת
+IMG_URL = "https://discordapp.com"
 
 # מערכת אימות (VERIFICATION)
 class VerifyView(View):
@@ -76,7 +79,7 @@ async def setup_verify(ctx):
         description="```🛠️ מנגנון אימות השחקנים הרשמי של השרת```\n\nלחצו על הכפתור הירוק למטה כדי לבצע סנכרון רשת, לקבל את רול התושב ולפתוח גישה מלאה לעיר!",
         color=discord.Color.from_rgb(46, 204, 113)
     )
-    embed.set_footer(text="Chicago City Audit System • Secure Connection", icon_url=ctx.guild.icon.url if ctx.guild.icon else None)
+    embed.set_footer(text="Chicago City Audit System")
     await ctx.send(embed=embed, view=VerifyView())
 
 # מערכת טיקטים (TICKETS)
@@ -160,7 +163,7 @@ class TicketDropdown(Select):
         embed.add_field(name="👤 יוצר הפנייה", value=interaction.user.mention, inline=True)
         embed.add_field(name="📂 מחלקה מבוקשת", value=f"`{self.values}`", inline=True)
         embed.add_field(name="🔒 סטטוס מערכת", value="`ממתין לנציג צוות`", inline=False)
-        embed.set_footer(text="Chicago City Core • Secure Support Environment")
+        embed.set_footer(text="Chicago City Core")
         
         await ticket_channel.send(embed=embed, view=TicketControls())
         
@@ -180,8 +183,7 @@ async def setup_tickets(ctx):
         description="```📊 מערכת ניהול הפניות והתמיכה של השרת```\n\nצריכים עזרה, רוצים לדווח על באג או להגיש מועמדות לצוות הניהול?\n\n**בחר את המחלקה המתאימה בתפריט למטה והבוט יפתח עבורך חדר מאובטח מול הצוות!**",
         color=discord.Color.from_rgb(155, 89, 182)
     )
-    embed.set_image(url="https://discordapp.com")
-    embed.set_footer(text="Chicago City Support Operations", icon_url=ctx.guild.icon.url if ctx.guild.icon else None)
+    embed.set_image(url=IMG_URL)
     await ctx.send(embed=embed, view=TicketDropdownView())
 
 # הגרלות (GIVEAWAYS)
@@ -256,7 +258,7 @@ async def giveaway(ctx, duration: int, winners: int, *, prize: str):
         color=discord.Color.from_rgb(241, 196, 15),
         timestamp=datetime.datetime.utcnow()
     )
-    embed.set_footer(text="Chicago City Giveaways • Click to Enter")
+    embed.set_footer(text="Chicago City Giveaways")
     
     channel = bot.get_channel(CHANNEL_GIVEAWAY)
     gv_view = AdvancedGiveawayView(prize, winners)
@@ -382,7 +384,7 @@ async def on_member_join(member):
             timestamp=datetime.datetime.utcnow()
         )
         w_embed.set_thumbnail(url=member.display_avatar.url)
-        w_embed.set_image(url="https://discordapp.com")
+        w_embed.set_image(url=IMG_URL)
         w_embed.set_footer(text="Chicago City Security System")
         await welcome_channel.send(embed=w_embed)
 
@@ -424,35 +426,28 @@ async def on_member_remove(member):
     embed = discord.Embed(title="📤 משתמש עזב את השרת", description=f"משתמש: {member.mention}\nשם: {member.name}", color=discord.Color.light_grey())
     await send_log("member_leave", embed)
 
-# --- משימה אוטומטית לעדכון סטטיסטיקות שרת חיות (SERVER STATS TRACKER) ---
+# משימה אוטומטית לעדכון סטטיסטיקות שרת חיות (SERVER STATS TRACKER)
 @tasks.loop(minutes=10)
 async def update_stats():
     for guild in bot.guilds:
-        # סופר סך הכל משתמשים
         total_members = guild.member_count
-        
-        # סופר מחוברים אונליין
         online_members = sum(1 for m in guild.members if m.status != discord.Status.offline and not m.bot)
         
-        # סופר אנשי צוות אונליין
         staff_role = guild.get_role(ROLE_STAFF)
         staff_online = 0
         if staff_role:
             staff_online = sum(1 for m in staff_role.members if m.status != discord.Status.offline and not m.bot)
             
-        # חיפוש או יצירה אוטומטית של חדרים בראש השרת
-        category = guild.categories[0] if guild.categories else None
+        category = guild.categories if guild.categories else None
         
         async def update_or_create_vc(name_prefix, value):
             expected_name = f"{name_prefix} {value}"
             channel = discord.utils.get(guild.voice_channels, name=expected_name)
             if not channel:
-                # מחפש חדר קיים שמתחיל באותו פסוק כדי לשנות לו שם
                 for vc in guild.voice_channels:
                     if vc.name.startswith(name_prefix):
                         await vc.edit(name=expected_name)
                         return
-                # אם לא נמצא בכלל, יוצר חדר נעול חדש
                 overwrites = {guild.default_role: discord.PermissionOverwrite(connect=False)}
                 await guild.create_voice_channel(name=expected_name, category=category, overwrites=overwrites)
             else:
@@ -476,7 +471,6 @@ async def on_ready():
         except: pass
     print("Invite cache seeded for Chicago City")
     
-    # מפעיל את משימת הסטטיסטיקות החיות ברקע!
     if not update_stats.is_running():
         update_stats.start()
 
