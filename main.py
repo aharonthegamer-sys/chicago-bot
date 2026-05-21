@@ -79,7 +79,7 @@ async def setup_verify(ctx):
     embed.set_footer(text="Chicago City Audit System • Secure Connection", icon_url=ctx.guild.icon.url if ctx.guild.icon else None)
     await ctx.send(embed=embed, view=VerifyView())
 
-# --- מערכת טיקטים בעיצוב סייבר מתקדם ---
+# מערכת טיקטים (TICKETS)
 class TicketControls(View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -151,7 +151,6 @@ class TicketDropdown(Select):
         
         await interaction.followup.send(f"✅ כרטיס התמיכה שלך נוצר בהצלחה! כנס לחדר: {ticket_channel.mention}", ephemeral=True)
         
-        # הודעת מעוצבת סייבר מקצועית בתוך הטיקט
         embed = discord.Embed(
             title="📥 CONTROL PANEL — TICKET OPENED",
             description=f"ברוך הבא למרכז התמיכה של **Chicago City**.\nנפתח עבורך חדר תמיכה רשמי בנושא המבוקש.",
@@ -165,7 +164,6 @@ class TicketDropdown(Select):
         
         await ticket_channel.send(embed=embed, view=TicketControls())
         
-        # תיוג שקט ומהיר של הצוות (Ping) ומחיקה מיידית
         ping_msg = await ticket_channel.send(f"<@&{ROLE_STAFF}>")
         await ping_msg.delete()
 
@@ -182,7 +180,7 @@ async def setup_tickets(ctx):
         description="```📊 מערכת ניהול הפניות והתמיכה של השרת```\n\nצריכים עזרה, רוצים לדווח על באג או להגיש מועמדות לצוות הניהול?\n\n**בחר את המחלקה המתאימה בתפריט למטה והבוט יפתח עבורך חדר מאובטח מול הצוות!**",
         color=discord.Color.from_rgb(155, 89, 182)
     )
-    embed.set_image(url="https://discordapp.net")
+    embed.set_image(url="https://cdn.discordapp.com/attachments/1483039216832086119/1506808239474606150/ef9fae827be7e2e7.png?ex=6a0f9c07&is=6a0e4a87&hm=750505cf4ec99727ab96615fc794a0b3c2407c130700728ece77380ce684892d&")
     embed.set_footer(text="Chicago City Support Operations", icon_url=ctx.guild.icon.url if ctx.guild.icon else None)
     await ctx.send(embed=embed, view=TicketDropdownView())
 
@@ -324,6 +322,7 @@ async def on_message_delete(message):
     embed = discord.Embed(title="🗑️ הודעה נמחקה", description=f"**כותב ההודעה:** {message.author.mention}\n**ערוץ:** {message.channel.mention}\n\n**תוכן ההודעה:**\n{message.content}", color=discord.Color.red())
     await send_log("message_delete", embed)
 
+# מערכת וולקם עם הרקע החדש והמטורף!
 @bot.event
 async def on_member_join(member):
     embed = discord.Embed(title="📥 משתמש חדש נכנס", description=f"משתמש: {member.mention}\nשם משתמש: {member.name}\nאיידי: {member.id}", color=discord.Color.green())
@@ -332,14 +331,15 @@ async def on_member_join(member):
     welcome_channel = bot.get_channel(LOG_CHANNELS["welcome_embed"])
     if welcome_channel:
         w_embed = discord.Embed(
-            title=f"🎉 ברוך הבא ל-Chicago City, {member.name}! 🎉",
-            description=f"שמחים שהצטרפת אלינו! כנס לערוץ האימות כדי לקבל גישה מלאה לשרת: <#{ROLE_VERIFIED}> 🛡️",
-            color=discord.Color.red(),
+            title=f"💎 ברוך הבא ל-Chicago City, {member.name}! 💎",
+            description=f"שמחים שהצטרפת אלינו! כנס לערוץ האימות כדי לקבל גישה מלאה לעיר: <#{ROLE_VERIFIED}> 🛡️",
+            color=discord.Color.from_rgb(180, 20, 20),
             timestamp=datetime.datetime.utcnow()
         )
         w_embed.set_thumbnail(url=member.display_avatar.url)
-        w_embed.set_image(url="https://discordapp.net")
-        w_embed.set_footer(text="Chicago City System Welcome")
+        # שימוש ברקע היהלומים החדש ששלחת!
+        w_embed.set_image(url="https://cdn.discordapp.com/attachments/1483039216832086119/1506808239474606150/ef9fae827be7e2e7.png?ex=6a0f9c07&is=6a0e4a87&hm=750505cf4ec99727ab96615fc794a0b3c2407c130700728ece77380ce684892d&")
+        w_embed.set_footer(text="Chicago City Security System")
         await welcome_channel.send(embed=w_embed)
 
     invites_before = invites_cache.get(member.guild.id, {})
