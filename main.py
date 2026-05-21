@@ -26,18 +26,13 @@ intents.message_content = True
 intents.members = True
 intents.guilds = True
 intents.messages = True
-intents.presences = True  # חובה בשביל לזהות מי עושה לייב!
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# איידיז קבועים של CHICAGO CITY
+# איידיז נעולים וסופיים של CHICAGO CITY
 ROLE_VERIFIED = 1483039214793789489
 ROLE_STAFF = 1483039215364345930
 CHANNEL_GIVEAWAY = 1483039216366780532
-
-# הגדרות מערכת הלייבים החדשה
-CHANNEL_STREAMERS = 1483039216832086120  # החדר ששלחת
-ROLE_STREAMER_ID = 1504583182400618598  # הרול ששלחת
 
 LOG_CHANNELS = {
     "channel_create": 1483039219654852617,
@@ -49,8 +44,6 @@ LOG_CHANNELS = {
     "role_delete": 1483039219923554472,
     "message_edit": 1483039219923554473,
     "message_delete": 1483039219923554474,
-    "member_join": 1483039219923554475,
-    "member_leave": 1483039219923554476,
     "welcome_embed": 1504124994999943269,
     "invite_tracker": 1506417177719210194,
     "security": 1483039220284002367
@@ -58,7 +51,6 @@ LOG_CHANNELS = {
 
 warnings_db = {}
 invites_cache = {}
-active_streams = {}  # שמירת הודעות לייב פעילות
 
 # מערכת אימות (VERIFICATION)
 class VerifyView(View):
@@ -187,7 +179,7 @@ async def setup_tickets(ctx):
         description="```📊 מערכת ניהול הפניות והתמיכה של השרת```\n\nצריכים עזרה, רוצים לדווח על באג או להגיש מועמדות לצוות הניהול?\n\n**בחר את המחלקה המתאימה בתפריט למטה והבוט יפתח עבורך חדר מאובטח מול הצוות!**",
         color=discord.Color.from_rgb(155, 89, 182)
     )
-    embed.set_image(url="https://discordapp.net&")
+    embed.set_image(url="https://discordapp.com&")
     embed.set_footer(text="Chicago City Support Operations", icon_url=ctx.guild.icon.url if ctx.guild.icon else None)
     await ctx.send(embed=embed, view=TicketDropdownView())
 
@@ -218,7 +210,7 @@ class AdvancedGiveawayView(View):
         if staff_role not in interaction.user.roles and not interaction.user.guild_permissions.administrator:
             return await interaction.followup.send("❌ כפתור זה מיועד לצוות השרת בלבד.", ephemeral=True)
         
-        await interaction.followup.send(f"📊 **סטטיסטיקת הגרלה:** כרגע יש `{len(self.entrants)}` משתתפים רשומים.", ephemeral=True)
+        await interaction.followup.send(f"📊 **סטטיסטיקת הגרלה:** כרגע יש כרגע `{len(self.entrants)}` משתתפים רשומים.", ephemeral=True)
 
     @discord.ui.button(label="סגור הגרלה ⏱️", style=discord.ButtonStyle.red, custom_id="gv_end_now")
     async def end_giveaway_early(self, interaction: discord.Interaction, button: Button):
@@ -248,7 +240,7 @@ async def end_giveaway_logic(channel, prize, winners_count, entrants, message):
         
         embed = discord.Embed(
             title="🎁 ההגרלה הסתיימה בהצלחה! 🎁",
-            description=f"**הפרס:** {prize}\n**ההזוכים המאושרים:** {mentions}\n\nתודה לכל המשתתפים! פנו לצוות לקבלת הפרס שלכם.",
+            description=f"**הפרס:** {prize}\n**הזוכים המאושרים:** {mentions}\n\nתודה לכל המשתתפים! פנו לצוות לקבלת הפרס שלכם.",
             color=discord.Color.from_rgb(46, 204, 113)
         )
         await message.edit(embed=embed, view=None)
@@ -374,7 +366,7 @@ async def on_message_delete(message):
     embed = discord.Embed(title="🗑️ הודעה נמחקה", description=f"**כותב ההודעה:** {message.author.mention}\n**ערוץ:** {message.channel.mention}\n\n**תוכן ההודעה:**\n{message.content}", color=discord.Color.red())
     await send_log("message_delete", embed)
 
-# מערכת וולקם (WELCOME)
+# מערכת וולקם (WELCOME SYSTEM)
 @bot.event
 async def on_member_join(member):
     embed = discord.Embed(title="📥 משתמש חדש נכנס", description=f"משתמש: {member.mention}\nשם משתמש: {member.name}\nאיידי: {member.id}", color=discord.Color.green())
@@ -389,14 +381,11 @@ async def on_member_join(member):
             timestamp=datetime.datetime.utcnow()
         )
         w_embed.set_thumbnail(url=member.display_avatar.url)
-        
-        # תיקון הקישור שנחתך - עכשיו בשורה אחת שלמה ותקינה!
-        bg_url = "https://discordapp.com&"
-        w_embed.set_image(url=bg_url)
+        w_embed.set_image(url="https://discordapp.com&")
         w_embed.set_footer(text="Chicago City Security System")
         await welcome_channel.send(embed=w_embed)
 
-    # מערכת אינוויט טראקר (Invite Tracker)
+    # מערכת אינוויט טראקר (INVITE TRACKER)
     invites_before = invites_cache.get(member.guild.id, {})
     try:
         invites_after = await member.guild.invites()
@@ -426,72 +415,13 @@ async def on_member_join(member):
     inv_embed.add_field(name="🔑 קוד הזמנה:", value=code_text, inline=True)
     inv_embed.add_field(name="📊 סך הכל שימושים בקוד:", value=uses_text, inline=True)
     inv_embed.set_footer(text="Chicago City System Tracking")
+    
     await send_log("invite_tracker", inv_embed)
 
 @bot.event
 async def on_member_remove(member):
     embed = discord.Embed(title="📤 משתמש עזב את השרת", description=f"משתמש: {member.mention}\nשם: {member.name}", color=discord.Color.light_grey())
     await send_log("member_leave", embed)
-
-# --- מערכת התראות לייבים אוטומטית (STREAM ALERT SYSTEM) ---
-class StreamLinkView(View):
-    def __init__(self, url):
-        super().__init__(timeout=None)
-        self.add_item(Button(label="צפה בלייב עכשיו 🎥", url=url, style=discord.ButtonStyle.link))
-
-@bot.event
-async def on_presence_update(before, after):
-    # ודא שמדובר במשתמש בשרת שמחזיק ברול הסטרימר
-    member = after
-    guild = member.guild
-    streamer_role = guild.get_role(ROLE_STREAMER_ID)
-    
-    if not streamer_role or streamer_role not in member.roles:
-        return
-
-    # בדיקה אם המשתמש התחיל לעשות לייב
-    is_streaming = False
-    stream_url = None
-    stream_game = "שידור חי"
-    
-    for activity in member.activities:
-        if activity.type == discord.ActivityType.streaming:
-            is_streaming = True
-            stream_url = activity.url
-            if activity.name:
-                stream_game = activity.name
-            break
-
-    channel = bot.get_channel(CHANNEL_STREAMERS)
-    if not channel:
-        return
-
-    # אם הוא התחיל לייב ועדיין לא פירסמנו אותו
-    if is_streaming and member.id not in active_streams:
-        embed = discord.Embed(
-            title="🔴 STREAMER LIVE — CHRICAGO MEDIA 🔴",
-            description=f"יוצר התוכן הרשמי שלנו {member.mention} עלה עכשיו לשידור חי באוויר! 🔥\nבואו לתמוך, לתת לייק ולראות מה קורה בעיר!",
-            color=discord.Color.from_rgb(155, 89, 182),
-            timestamp=datetime.datetime.utcnow()
-        )
-        embed.add_field(name="👤 סטרימר:", value=f"**{member.name}**", inline=True)
-        embed.add_field(name="🎮 משדר כרגע:", value=f"`{stream_game}`", inline=True)
-        embed.set_thumbnail(url=member.display_avatar.url)
-        embed.set_image(url="https://discordapp.com")
-        embed.set_footer(text="Chicago City Media Network Control")
-        
-        msg = await channel.send(embed=embed, view=StreamLinkView(stream_url))
-        active_streams[member.id] = msg.id
-
-    # אם הוא כיבה את הלייב — נמחק את הודעת הפרסום באופן אוטומטי
-    elif not is_streaming and member.id in active_streams:
-        try:
-            msg_id = active_streams[member.id]
-            msg = await channel.fetch_message(msg_id)
-            await msg.delete()
-        except:
-            pass
-        del active_streams[member.id]
 
 @bot.event
 async def on_ready():
@@ -505,4 +435,5 @@ async def on_ready():
     print("Invite cache seeded for Chicago City")
 
 keep_alive()
+
 bot.run(os.environ['DISCORD_TOKEN'])
