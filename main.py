@@ -222,13 +222,13 @@ async def on_member_join(member):
         if member.guild.icon: embed.set_image(url=member.guild.icon.url)
         await w_ch.send(embed=embed)
 
-# תיקון הכפתור של הקישור - בלי custom_id!
 class FiveMConnectView(View):
     def __init__(self):
         super().__init__(timeout=None)
         self.add_item(discord.ui.Button(label="התחברות ישירה לעיר 🚀", style=discord.ButtonStyle.link, url="https://cfx.re"))
 
-@tasks.loop(minutes=5)
+# --- עדכון משימת הסטטוס ל-2 דקות בלבד (MINUTES=2) ---
+@tasks.loop(minutes=2)
 async def update_fivem_status():
     global fivem_msg_id
     ch = bot.get_channel(CHANNEL_FIVEM_STATUS)
