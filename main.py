@@ -6,6 +6,7 @@ import datetime
 from flask import Flask
 from threading import Thread
 import os
+import random
 
 app = Flask('')
 
@@ -180,48 +181,94 @@ async def setup_tickets(ctx):
         description="```📊 מערכת ניהול הפניות והתמיכה של השרת```\n\nצריכים עזרה, רוצים לדווח על באג או להגיש מועמדות לצוות הניהול?\n\n**בחר את המחלקה המתאימה בתפריט למטה והבוט יפתח עבורך חדר מאובטח מול הצוות!**",
         color=discord.Color.from_rgb(155, 89, 182)
     )
-    embed.set_image(url="https://cdn.discordapp.com/attachments/1483039216832086119/1506808239474606150/ef9fae827be7e2e7.png?ex=6a0f9c07&is=6a0e4a87&hm=750505cf4ec99727ab96615fc794a0b3c2407c130700728ece77380ce684892d&")
+    embed.set_image(url="https://discordapp.net&")
     embed.set_footer(text="Chicago City Support Operations", icon_url=ctx.guild.icon.url if ctx.guild.icon else None)
     await ctx.send(embed=embed, view=TicketDropdownView())
 
-# הגרלות (GIVEAWAYS)
-class GiveawayView(View):
-    def __init__(self, message_id):
+# --- מערכת הגרלות משודרגת עם פאנל ניהול (ADVANCED GIVEAWAY SYSTEM) ---
+class AdvancedGiveawayView(View):
+    def __init__(self, prize, winners_count):
         super().__init__(timeout=None)
-        self.message_id = message_id
+        self.prize = prize
+        self.winners_count = winners_count
         self.entrants = []
+        self.active = True
 
-    @discord.ui.button(label="הצטרף להגרלה 🎉", style=discord.ButtonStyle.green, custom_id="join_giveaway")
-    async def join(self, interaction: discord.Interaction, button: Button):
+    @discord.ui.button(label="הצטרף להגרלה 🎉", style=discord.ButtonStyle.green, custom_id="gv_join")
+    async def join_giveaway(self, interaction: discord.Interaction, button: Button):
         await interaction.response.defer(ephemeral=True)
+        if not self.active:
+            return await interaction.followup.send("❌ ההגרלה הזו כבר הסתיימה!", ephemeral=True)
         if interaction.user.id in self.entrants:
-            return await interaction.followup.send("אתה כבר רשום להגרלה זו!", ephemeral=True)
+            return await interaction.followup.send("אתה כבר רשום להגרלה זו! 🍀", ephemeral=True)
+        
         self.entrants.append(interaction.user.id)
-        await interaction.followup.send("נרשמת להגרלה בהצלחה! בהצלחה 🍀", ephemeral=True)
+        await interaction.followup.send("✅ נרשמת בהצלחה להגרלה! בהצלחה!", ephemeral=True)
+
+    @discord.ui.button(label="כמות משתתפים 📈", style=discord.ButtonStyle.grey, custom_id="gv_status")
+    async def status_giveaway(self, interaction: discord.Interaction, button: Button):
+        await interaction.response.defer(ephemeral=True)
+        staff_role = interaction.guild.get_role(ROLE_STAFF)
+        if staff_role not in interaction.user.roles and not interaction.user.guild_permissions.administrator:
+            return await interaction.followup.send("❌ כפתור זה מיועד לצוות השרת בלבד.", ephemeral=True)
+        
+        await interaction.followup.send(f"📊 **סטטיסטיקת הגרלה:** כרגע יש כרגע `{len(self.entrants)}` משתתפים רשומים.", ephemeral=True)
+
+    @discord.ui.button(label="סגור הגרלה ⏱️", style=discord.ButtonStyle.red, custom_id="gv_end_now")
+    async def end_giveaway_early(self, interaction: discord.Interaction, button: Button):
+        await interaction.response.defer()
+        staff_role = interaction.guild.get_role(ROLE_STAFF)
+        if staff_role not in interaction.user.roles and not interaction.user.guild_permissions.administrator:
+            return await interaction.followup.send("❌ כפתור זה מיועד לצוות השרת בלבד.", ephemeral=True)
+        
+        if not self.active:
+            return await interaction.followup.send("❌ ההגרלה כבר נסגרה.", ephemeral=True)
+        
+        self.active = False
+        await end_giveaway_logic(interaction.channel, self.prize, self.winners_count, self.entrants, interaction.message)
+
+async def end_giveaway_logic(channel, prize, winners_count, entrants, message):
+    if len(entrants) < winners_count:
+        embed = discord.Embed(
+            title="❌ ההגרלה בוטלה",
+            description=f"ההגרלה על **{prize}** בוטלה עקב חוסר משתתפים מספק.",
+            color=discord.Color.red()
+        )
+        await message.edit(embed=embed, view=None)
+        await channel.send(f"⚠️ ההגרלה על **{prize}** בוטלה כי לא נרשמו מספיק אנשים.")
+    else:
+        chosen_winners = random.sample(entrants, winners_count)
+        mentions = ", ".join([f"<@{w}>" for w in chosen_winners])
+        
+        embed = discord.Embed(
+            title="🎁 ההגרלה הסתיימה בהצלחה! 🎁",
+            description=f"**הפרס:** {prize}\n**הזוכים המאושרים:** {mentions}\n\nתודה לכל המשתתפים! פנו לצוות לקבלת הפרס שלכם.",
+            color=discord.Color.from_rgb(46, 204, 113)
+        )
+        await message.edit(embed=embed, view=None)
+        await channel.send(f"🎉 **מזל טוב לזוכים הגדולים בהגרלה על {prize}!** {mentions} פנו לצוות בהקדם!")
 
 @bot.command()
 @commands.has_permissions(manage_messages=True)
 async def giveaway(ctx, duration: int, winners: int, *, prize: str):
     embed = discord.Embed(
-        title="🎉 הגרלה חדשה יצאה לדרך! 🎉",
-        description=f"**פרס:** {prize}\n**מספר זוכים:** {winners}\n**זמן לסיום:** {duration} דקות\n\nלחצו על הכפתור למטה כדי להיכנס!",
-        color=discord.Color.gold()
+        title="🎁 GIVEAWAY SYSTEM — CHICAGO CITY 🎁",
+        description=f"הגרלה חדשה ומטורפת יצאה לדרך בשרת!\n\n🏆 **פרס שווה:** `{prize}`\n👥 **כמות זוכים מוגדרת:** `{winners}`\n⏱️ **זמן לסיום אוטומטי:** `{duration}` דקות\n\nלחצו על הכפתור הירוק למטה כדי להירשם!",
+        color=discord.Color.from_rgb(241, 196, 15),
+        timestamp=datetime.datetime.utcnow()
     )
+    embed.set_footer(text="Chicago City Giveaways • Click to Enter")
+    
     channel = bot.get_channel(CHANNEL_GIVEAWAY)
-    gv_view = GiveawayView(None)
+    gv_view = AdvancedGiveawayView(prize, winners)
     msg = await channel.send(embed=embed, view=gv_view)
-    gv_view.message_id = msg.id
-    await ctx.send(f"ההגרלה פורסמה בהצלחה בערוץ {channel.mention}!")
+    await ctx.send(f"✅ ההגרלה שודרה בהצלחה בערוץ {channel.mention}!")
     
+    # טיימר אוטומטי למקרה שהצוות לא סגר ידנית קודם לכן
     await asyncio.sleep(duration * 60)
-    
-    import random
-    if len(gv_view.entrants) < winners:
-        await channel.send(f"ההגרלה על **{prize}** מבוטלת עקב חוסר משתתפים.")
-    else:
-        chosen_winners = random.sample(gv_view.entrants, winners)
-        mentions = ", ".join([f"<@{w}>" for w in chosen_winners])
-        await channel.send(f"🎉 מזל טוב לזוכים בהגרלה על **{prize}**: {mentions}! פנו לצוות לקבלת הפרס.")
+    if gv_view.active:
+        gv_view.active = False
+        await end_giveaway_logic(channel, prize, winners, gv_view.entrants, msg)
 
 # אזהרות (MODERATION)
 @bot.command()
@@ -322,7 +369,6 @@ async def on_message_delete(message):
     embed = discord.Embed(title="🗑️ הודעה נמחקה", description=f"**כותב ההודעה:** {message.author.mention}\n**ערוץ:** {message.channel.mention}\n\n**תוכן ההודעה:**\n{message.content}", color=discord.Color.red())
     await send_log("message_delete", embed)
 
-# מערכת וולקם עם הרקע החדש והמטורף!
 @bot.event
 async def on_member_join(member):
     embed = discord.Embed(title="📥 משתמש חדש נכנס", description=f"משתמש: {member.mention}\nשם משתמש: {member.name}\nאיידי: {member.id}", color=discord.Color.green())
@@ -337,8 +383,7 @@ async def on_member_join(member):
             timestamp=datetime.datetime.utcnow()
         )
         w_embed.set_thumbnail(url=member.display_avatar.url)
-        # שימוש ברקע היהלומים החדש ששלחת!
-        w_embed.set_image(url="https://cdn.discordapp.com/attachments/1483039216832086119/1506808239474606150/ef9fae827be7e2e7.png?ex=6a0f9c07&is=6a0e4a87&hm=750505cf4ec99727ab96615fc794a0b3c2407c130700728ece77380ce684892d&")
+        w_embed.set_image(url="https://discordapp.com&")
         w_embed.set_footer(text="Chicago City Security System")
         await welcome_channel.send(embed=w_embed)
 
