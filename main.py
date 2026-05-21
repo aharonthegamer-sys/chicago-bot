@@ -1,6 +1,6 @@
 import discord
 from discord.ext import commands, tasks
-from discord.ui import Button, View, Select
+from discord.ui import Button, View, Select, Modal, TextInput
 import asyncio, datetime, os, random, aiohttp, socket
 from flask import Flask
 from threading import Thread
@@ -24,7 +24,10 @@ CHANNEL_STAFF_WARNS_LOG = 1483039219336347810
 CHANNEL_FIVEM_STATUS = 1506965475270332476 
 CHANNEL_TICKET_LOGS = 1483039219654852612
 
-# הגדרת שרת המשחק המדויקת שלכם!
+# האיידיז החדשים של מערכת ההצעות ששלחת!
+CHANNEL_SUGGEST_SETUP = 1507020507776811068
+CHANNEL_SUGGEST_LOGS = 1483039217482334253
+
 FIVEM_IP_ONLY = "135.148.36.192"
 FIVEM_PORT_ONLY = 30125
 CFX_ID = "rmadb7p"
@@ -101,7 +104,7 @@ class TicketControls(View):
         try:
             msg = await bot.wait_for('message', check=check, timeout=30)
             if msg.mentions:
-                target = msg.mentions[0]
+                target = msg.mentions
                 await interaction.channel.set_permissions(target, read_messages=True, send_messages=True)
                 await interaction.channel.send(f"✅ המשתמש {target.mention} הוסף בהצלחה לכרטיס התמיכה הנוכחי!")
             else: await interaction.channel.send("❌ לא תוייג משתמש תקין. הפעולה בוטלה.")
@@ -268,7 +271,47 @@ class FiveMConnectView(View):
         super().__init__(timeout=None)
         self.add_item(discord.ui.Button(label="התחברות ישירה לעיר 🚀", style=discord.ButtonStyle.link, url="https://cfx.re"))
 
-# --- מנגנון בדיקת סטטוס פנימי ישיר (SOCKET PORT PING) ---
+# --- מערכת הצעות מטורפת (SUGGESTIONS SYSTEM) ---
+class SuggestionModal(Modal):
+    def __init__(self):
+        super().__init__(title="Chicago City — טופס הצעה")
+        self.title_input = TextInput(label="כותרת ההצעה שלך:", placeholder="רשום בקצרה על מה ההצעה...", max_length=100)
+        self.desc_input = TextInput(label="פירוט ההצעה במלואה:", style=discord.TextStyle.paragraph, placeholder="פרט כאן כמה שיותר מידע על הרעיון שלך...", max_length=1000)
+        self.add_item(self.title_input)
+        self.add_item(self.desc_input)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        log_ch = bot.get_channel(CHANNEL_SUGGEST_LOGS)
+        if not log_ch: return await interaction.followup.send("❌ שגיאה: ערוץ לוג ההצעות לא נמצא.", ephemeral=True)
+        
+        embed = discord.Embed(title="💡 הצעה חדשה עלתה לעיר!", color=discord.Color.from_rgb(241, 196, 15), timestamp=datetime.datetime.utcnow())
+        embed.set_thumbnail(url=interaction.user.display_avatar.url)
+        embed.add_field(name="👤 המציע הרשמי:", value=interaction.user.mention, inline=True)
+        embed.add_field(name="📌 נושא ההצעה:", value=f"`{self.title_input.value}`", inline=True)
+        embed.add_field(name="📝 פירוט הרעיון:", value=f"```\n{self.desc_input.value}```", inline=False)
+        embed.set_footer(text="Chicago City Suggestions Desk")
+        
+        msg = await log_ch.send(embed=embed)
+        await msg.add_reaction("👍")
+        await msg.add_reaction("👎")
+        await interaction.followup.send("✅ ההצעה שלך נשלחה בהצלחה רבה ועברה להצבעת הקהילה! תודה!", ephemeral=True)
+
+class SuggestionPanel(View):
+    def __init__(self): super().__init__(timeout=None)
+    @discord.ui.button(label="שלח הצעה חדשה 📝", style=discord.ButtonStyle.blurple, custom_id="send_sug_btn")
+    async def send_sug(self, interaction: discord.Interaction, button: Button):
+        await interaction.response.send_modal(SuggestionModal())
+
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def setup_suggestions(ctx):
+    embed = discord.Embed(title="Chicago City Suggestions room", description="יש לכם רעיון מטורף שיכול לשדרג את העיר?\nרוצים להציע רכב חדש, חוק או מערכת מעניינת?\n\n**לחצו על הכפתור הכחול למטה, מלאו את הטופס וההצעה שלכם תעבור מייד להצבעת האזרחים!**", color=discord.Color.gold())
+    embed.set_footer(text="Chicago City")
+    if ctx.guild.icon: embed.set_image(url=ctx.guild.icon.url)
+    await ctx.send(embed=embed, view=SuggestionPanel())
+
+# --- משימת הסטטוס המאוחדת (UDP SOCKET PING) ---
 @tasks.loop(minutes=2)
 async def update_fivem_status():
     global fivem_msg_id
@@ -283,40 +326,38 @@ async def update_fivem_status():
 
     status_str, players_str, staff_str, color = "🔴 מנותק (Offline)", "0 / 0", "0 מחוברים", discord.Color.red()
     
-    # ביצוע פניית רשת לוקאלית ישירה (Socket Ping) לבדיקה אם הפורט פתוח
     loop = asyncio.get_event_loop()
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.settimeout(3)
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.settimeout(2.5)
     try:
-        await loop.run_in_executor(None, s.connect, (FIVEM_IP_ONLY, FIVEM_PORT_ONLY))
-        status_str = "🟢 מקוון (Online)"
-        color = discord.Color.green()
-        s.close()
-        
-        # משיכת שחקנים רשמית עוקפת חסימות דרך רשימת השרתים הציבורית
-        headers = {"User-Agent": "Mozilla/5.0"}
-        async with aiohttp.ClientSession(headers=headers) as session:
-            async with session.get(f"https://fivem.net{CFX_ID}", timeout=4) as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    server_data = data.get("Data", {})
-                    players_list = server_data.get("players", [])
-                    players_str = f"{len(players_list)} / {server_data.get('sv_maxclients', 64)}"
-                    
-                    fivem_identifiers = []
-                    for player in players_list:
-                        for identifier in player.get('identifiers', []):
-                            if identifier.startswith('discord:'):
-                                fivem_identifiers.append(int(identifier.replace('discord:', '')))
-                    staff_game_count = sum(1 for m in staff_role.members if m.id in fivem_identifiers) if staff_role else 0
-                    staff_str = f"{staff_game_count} אנשי צוות בעיר"
-    except:
-        try: s.close()
-        except: pass
+        await loop.run_in_executor(None, s.sendto, b'\xff\xff\xff\xffping\x00', (FIVEM_IP_ONLY, FIVEM_PORT_ONLY))
+        data, _ = await loop.run_in_executor(None, s.recvfrom, 1024)
+        if data:
+            status_str = "🟢 מקוון (Online)"
+            color = discord.Color.green()
+            
+            headers = {"User-Agent": "Mozilla/5.0"}
+            async with aiohttp.ClientSession(headers=headers) as session:
+                async with session.get(f"https://fivem.net{CFX_ID}", timeout=4) as resp:
+                    if resp.status == 200:
+                        res_data = await resp.json()
+                        server_data = res_data.get("Data", {})
+                        players_list = server_data.get("players", [])
+                        players_str = f"{len(players_list)} / {server_data.get('sv_maxclients', 64)}"
+                        
+                        fivem_identifiers = []
+                        for player in players_list:
+                            for identifier in player.get('identifiers', []):
+                                if identifier.startswith('discord:'):
+                                    fivem_identifiers.append(int(identifier.replace('discord:', '')))
+                        staff_game_count = sum(1 for m in staff_role.members if m.id in fivem_identifiers) if staff_role else 0
+                        staff_str = f"{staff_game_count} אנשי צוות בעיר"
+    except: pass
+    finally: s.close()
 
     embed = discord.Embed(title="Chicago City — Status", color=color, timestamp=datetime.datetime.utcnow())
     embed.add_field(name="🎮 FIVEM STATUS", value=f"• סטטוס השרת: `{status_str}`\n• שחקנים בעיר: `{players_str}`\n• צוות בתוך העיר: `{staff_str}`", inline=False)
-    embed.add_field(name="💬 DISCORD STATUS", value=f"• סך הכל תתושבים: `{total_dc_members} אזרחים`\n• משתמשים אונליין: `{online_dc_users} מחוברים`\n• אנשי צוות אונליין: `{staff_dc_online} זמינים`", inline=False)
+    embed.add_field(name="💬 DISCORD STATUS", value=f"• סך הכל תושבים: `{total_dc_members} אזרחים`\n• משתמשים אונליין: `{online_dc_users} מחוברים`\n• אנשי צוות אונליין: `{staff_dc_online} זמינים`", inline=False)
     embed.set_footer(text="Chicago City • ערוץ סטטוס רשמי")
     if guild.icon: embed.set_thumbnail(url=guild.icon.url)
 
@@ -330,12 +371,12 @@ async def update_fivem_status():
         else:
             msg = await ch.fetch_message(fivem_msg_id)
             await msg.edit(embed=embed, view=FiveMConnectView())
-    except:
-        fivem_msg_id = None
+    except: fivem_msg_id = None
 
 @bot.event
 async def on_ready():
     print(f"Logged in as {bot.user.name}")
+    bot.add_view(SuggestionPanel()) # נעילת הכפתור של ההצעות שיעבוד גם אחרי ריסטרט!
     if not update_fivem_status.is_running(): update_fivem_status.start()
 
 keep_alive()
