@@ -13,7 +13,7 @@ def keep_alive(): Thread(target=run).start()
 
 intents = discord.Intents.default()
 intents.message_content = intents.members = intents.guilds = intents.messages = intents.presences = True
-intents.invites = True # הפעלת אינטנט הזמנות חיוני למערכת האינוויטס החדשה!
+intents.invites = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 # איידיז קבועים — CHICAGO CITY
@@ -27,7 +27,7 @@ CHANNEL_WARN_PANEL = 1507023136095207515
 CHANNEL_STAFF_WARNS_LOG = 1483039219336347810 
 CHANNEL_FIVEM_STATUS = 1506965475270332476 
 CHANNEL_TICKET_LOGS = 1483039219654852612
-CHANNEL_INVITE_LOGS = 1506417177719210194 # חדר האיידי של האינוויט מהתמונה שלך!
+CHANNEL_INVITE_LOGS = 1506417177719210194 
 
 FIVEM_IP_ONLY = "135.148.36.192"
 FIVEM_PORT_ONLY = 30125
@@ -272,7 +272,7 @@ class WarnUserSelect(UserSelect):
         self.action_type = action_type
 
     async def callback(self, interaction: discord.Interaction):
-        target = self.values[0]
+        target = self.values
         if self.action_type == "add":
             await interaction.response.send_modal(StaffSelectReasonModal(target))
         elif self.action_type == "view":
@@ -379,7 +379,7 @@ async def on_message_delete(m):
     if m.author.bot: return
     await send_log("message_delete", discord.Embed(title="Chicago City", description=f"🗑️ הודעה נמחקה ע''י {m.author.mention}\nחדר: {m.channel.mention}\nתוכן: {m.content}", color=discord.Color.red()))
 
-# --- מנוע ה-INVITE TRACKER המטורף והמעוצב מהתמונה שלך (AUTOMATIC DISCORD INVITE ENGINE) ---
+# --- מנוע ה-INVITE TRACKER המטורף והמשודרג ברמת פרטיזן עילית (PREMIUM AVATAR TRACKER) ---
 async def fetch_invites(guild):
     try: return {invite.code: invite for invite in await guild.invites()}
     except: return {}
@@ -404,7 +404,6 @@ async def on_member_join(member):
         if member.guild.icon: embed.set_image(url=member.guild.icon.url)
         await w_ch.send(embed=embed)
 
-    # הרצת מנוע מעקב ההזמנות המעוצב בדיוק לפי התמונה!
     log_ch = bot.get_channel(CHANNEL_INVITE_LOGS)
     if not log_ch: return
     
@@ -419,18 +418,22 @@ async def on_member_join(member):
             inviter = old_invites[code].inviter
             inviter_str = inviter.mention
             code_str = f"`{code}`"
-            
-            # חישוב סך כל ההזמנות של אותו מנהל/משתמש בשרת
             total_uses = sum(inv.uses for inv in new_invites.values() if inv.inviter and inv.inviter.id == inviter.id)
             total_str = f"`{total_uses}`"
             break
             
-    embed = discord.Embed(title="📥 הצטרפות חדשה - מעקב הזמנות", color=discord.Color.from_rgb(142, 68, 173))
-    embed.add_field(name="👤 המשתמש שהצטרף", value=member.mention, inline=False)
-    embed.add_field(name="🤝 הוזמן על ידי", value=inviter_str, inline=True)
-    embed.add_field(name="📊 סך הכל ההזמנות שלו", value=f"{total_str} הזמנות", inline=True)
-    embed.set_footer(text=f"Chicago City Invite Tracker • ID: {member.id}")
-    if member.guild.icon: embed.set_thumbnail(url=member.guild.icon.url)
+    # עיצוב פרטיזן עילית מטורף - נקי, הייטקיסטי ומקצועי עם תמונת השחקן בצד ימין!
+    embed = discord.Embed(title="📥 הצטרפות חדשה — מערכת מעקב", color=discord.Color.from_rgb(155, 89, 182))
+    embed.description = f"**👤 אזרח חדש בשערי העיר:** {member.mention}\n" \
+                        f"**🆔 מזהה דיסקורד:** `{member.id}`\n" \
+                        f"━︎━︎━︎━︎━︎━︎━︎━︎━︎━︎━︎━︎━︎━︎━︎━︎━︎━︎━︎━︎━︎\n" \
+                        f"**🤝 הוגש על ידי:** {inviter_str}\n" \
+                        f"**📊 תיק הזמנות כולל:** {total_str} משתמשים בעיר\n" \
+                        f"**🔑 קוד הזמנה בשימוש:** {code_str}"
+    
+    embed.set_footer(text="Chicago City Premium Invite Tracker")
+    # שאיבת תמונת הפרופיל הדינמית של המשתמש שנכנס והצגתה בצד ימין (Thumbnail)!
+    embed.set_thumbnail(url=member.display_avatar.url)
     await log_ch.send(embed=embed)
 
 class FiveMConnectView(View):
