@@ -21,7 +21,7 @@ ROLE_STAFF = 1483039215364345930
 CHANNEL_GIVEAWAY = 1483039216366780532
 ROLE_WARN_ADMIN = 1483039215393702012
 CHANNEL_STAFF_WARNS_LOG = 1483039219336347810
-CHANNEL_FIVEM_STATUS = 1506965475270332476 # החדר ששלחת עכשיו!
+CHANNEL_FIVEM_STATUS = 1506965475270332476 
 FIVEM_IP = "135.148.36.192:30125"
 
 LOG_CHANNELS = {
@@ -222,35 +222,29 @@ async def on_member_join(member):
         if member.guild.icon: embed.set_image(url=member.guild.icon.url)
         await w_ch.send(embed=embed)
 
-@tasks.loop(minutes=10)
-async def update_stats():
-    for g in bot.guilds:
-        online = sum(1 for m in g.members if m.status != discord.Status.offline and not m.bot)
-        r = g.get_role(ROLE_STAFF); staff = sum(1 for m in r.members if m.status != discord.Status.offline and not m.bot) if r else 0
-        async def up(prefix, val):
-            name = f"{prefix} {val}"
-            ch = discord.utils.get(g.voice_channels, name=name)
-            if not ch:
-                for vc in g.voice_channels:
-                    if vc.name.startswith(prefix): await vc.edit(name=name); return
-                await g.create_voice_channel(name=name, overwrites={g.default_role: discord.PermissionOverwrite(connect=False)})
-            else: await ch.edit(name=name)
-        try:
-            await up("👥 Total Members:", g.member_count); await up("🟢 Online Users:", online); await up("🛡️ Staff Online:", staff)
-        except: pass
-
-# --- משימה אוטומטית לעדכון סטטוס שרת FiveM (FIVEM LIVE STATUS TRACKER) ---
+# --- משימה מאוחדת לריכוז כל הסטטיסטיקות (FIVEM & DISCORD LIVE STATUS) ---
 @tasks.loop(minutes=5)
 async def update_fivem_status():
     global fivem_msg_id
     ch = bot.get_channel(CHANNEL_FIVEM_STATUS)
     if not ch: return
     
+    guild = ch.guild
+    
+    # 1. חישוב נתוני דיסקורד חים בשבילך!
+    total_dc_members = guild.member_count
+    online_dc_users = sum(1 for m in guild.members if m.status != discord.Status.offline and not m.bot)
+    
+    staff_role = guild.get_role(ROLE_STAFF)
+    staff_dc_online = 0
+    if staff_role:
+        staff_dc_online = sum(1 for m in staff_role.members if m.status != discord.Status.offline and not m.bot)
+
+    # 2. חישוב נתוני שרת FiveM
     status_str, players_str, staff_str, color = "🔴 מנותק (Offline)", "0 / 0", "0 מחוברים", discord.Color.red()
     
     async with aiohttp.ClientSession() as session:
         try:
-            # פנייה מאובטחת וישירה לשרת ה-FiveM שלכם לשאיבת שחקנים ונתונים
             async with session.get(f"http://{FIVEM_IP}/players.json", timeout=4) as r1, session.get(f"http://{FIVEM_IP}/dynamic.json", timeout=4) as r2:
                 if r1.status == 200 and r2.status == 200:
                     players_data = await r1.json()
@@ -260,35 +254,34 @@ async def update_fivem_status():
                     color = discord.Color.green()
                     players_str = f"{len(players_data)} / {dynamic_data.get('maxclients', 64)}"
                     
-                    # פונקציה חכמה שסורקת בדיסקורד מי מהשחקנים מחובר כרגע בתוך ה-FiveM ומחזיק ברול צוות
-                    staff_count = 0
-                    guild = ch.guild
-                    staff_role = guild.get_role(ROLE_STAFF)
-                    
+                    fivem_identifiers = []
+                    for player in players_data:
+                        for identifier in player.get('identifiers', []):
+                            if identifier.startswith('discord:'):
+                                fivem_identifiers.append(int(identifier.replace('discord:', '')))
+                                
+                    staff_game_count = 0
                     if staff_role:
-                        # שואב את כל האיידיז של השחקנים שנמצאים כרגע בשרת ה-FiveM ומבצע הצלבה מול דיסקורד
-                        fivem_identifiers = []
-                        for player in players_data:
-                            for identifier in player.get('identifiers', []):
-                                if identifier.startswith('discord:'):
-                                    fivem_identifiers.append(int(identifier.replace('discord:', '')))
-                                    
-                        staff_count = sum(1 for m in staff_role.members if m.id in fivem_identifiers)
-                    staff_str = f"{staff_count} אנשי צוות בעיר"
+                        staff_game_count = sum(1 for m in staff_role.members if m.id in fivem_identifiers)
+                    staff_str = f"{staff_game_count} אנשי צוות בעיר"
         except: pass
 
+    # עיצוב טבלה מרוכזת, נקייה ומטורפת שמציגה את הכל במקום אחד!
     embed = discord.Embed(title="Chicago City — Status", color=color, timestamp=datetime.datetime.utcnow())
-    embed.add_field(name="🌐 סטטוס שרת FiveM", value=f"```\n{status_str}```", inline=False)
-    embed.add_field(name="👥 שחקנים בעיר", value=f"```\n{players_str}```", inline=True)
-    embed.add_field(name="🛡️ אנשי צוות בעיר", value=f"```\n{staff_str}```", inline=True)
+    
+    # חלק א׳: נתוני ה-FiveM
+    embed.add_field(name="🎮 FIVEM STATUS", value=f"• סטטוס השרת: `{status_str}`\n• שחקנים בעיר: `{players_str}`\n• צוות בתוך העיר: `{staff_str}`", inline=False)
+    
+    # חלק ב׳: הטבלה של הדיסקורד שביקשת!
+    embed.add_field(name="💬 DISCORD STATUS", value=f"• סך הכל תישבים: `{total_dc_members} אזרחים`\n• משתמשים אונליין: `{online_dc_users} מחוברים`\n• אנשי צוות אונליין: `{staff_dc_online} זמינים`", inline=False)
+    
     embed.set_footer(text="Chicago City")
-    if ch.guild.icon: embed.set_thumbnail(url=ch.guild.icon.url)
+    if guild.icon: embed.set_thumbnail(url=guild.icon.url)
 
     try:
         if fivem_msg_id is None:
-            # מחפש הודעה קודמת של הבוט בחדר כדי למנוע הצפות
             async for m in ch.history(limit=5):
-                if m.author == bot.user and m.embeds and m.embeds[0].title == "Chicago City — Status":
+                if m.author == bot.user and m.embeds and m.embeds.title == "Chicago City — Status":
                     fivem_msg_id = m.id; await m.edit(embed=embed); return
             msg = await ch.send(embed=embed)
             fivem_msg_id = msg.id
@@ -301,7 +294,6 @@ async def update_fivem_status():
 @bot.event
 async def on_ready():
     print(f"Logged in as {bot.user.name}")
-    update_stats.start()
     if not update_fivem_status.is_running(): update_fivem_status.start()
 
 keep_alive()
