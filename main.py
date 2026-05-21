@@ -1,7 +1,7 @@
 import discord
 from discord.ext import commands, tasks
 from discord.ui import Button, View, Select, Modal, TextInput
-import asyncio, datetime, os, random, aiohttp, socket
+import asyncio, datetime, os, random, aiohttp
 from flask import Flask
 from threading import Thread
 
@@ -18,18 +18,16 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 # איידיז קבועים — CHICAGO CITY
 ROLE_VERIFIED = 1483039214793789489
 ROLE_STAFF = 1483039215364345930
-CHANNEL_GIVEAWAY = 1483039216366780532
-ROLE_WARN_ADMIN = 1483039215393702012
-CHANNEL_STAFF_WARNS_LOG = 1483039219336347810
+ROLE_WARN_ADMIN = 1483039215393702012 # רול מנהל עליון מורשה לווארנים
+
+CHANNEL_GIVEAWAY_PANEL = 1507022943413342328 # חדר פאנל הגרלות לצוות
+CHANNEL_GIVEAWAY_PUBLIC = 1483039216366780532 # חדר הגרלות ציבורי לשחקנים
+
+CHANNEL_WARN_PANEL = 1507023136095207515 # חדר פאנל אזהרות למנהלים
+CHANNEL_STAFF_WARNS_LOG = 1483039219336347810 # חדר לוג אזהרות צוות
+
 CHANNEL_FIVEM_STATUS = 1506965475270332476 
 CHANNEL_TICKET_LOGS = 1483039219654852612
-
-# האיידיז החדשים של מערכת ההצעות ששלחת!
-CHANNEL_SUGGEST_SETUP = 1507020507776811068
-CHANNEL_SUGGEST_LOGS = 1483039217482334253
-
-FIVEM_IP_ONLY = "135.148.36.192"
-FIVEM_PORT_ONLY = 30125
 CFX_ID = "rmadb7p"
 
 LOG_CHANNELS = {
@@ -73,7 +71,6 @@ async def setup_verify(ctx):
 # מערכת טיקטים
 class TicketControls(View):
     def __init__(self): super().__init__(timeout=None)
-    
     @discord.ui.button(label="קח טיפול 🙋‍♂️", style=discord.ButtonStyle.blurple, custom_id="tk_claim")
     async def claim(self, interaction: discord.Interaction, button: Button):
         await interaction.response.defer()
@@ -104,7 +101,7 @@ class TicketControls(View):
         try:
             msg = await bot.wait_for('message', check=check, timeout=30)
             if msg.mentions:
-                target = msg.mentions
+                target = msg.mentions[0]
                 await interaction.channel.set_permissions(target, read_messages=True, send_messages=True)
                 await interaction.channel.send(f"✅ המשתמש {target.mention} הוסף בהצלחה לכרטיס התמיכה הנוכחי!")
             else: await interaction.channel.send("❌ לא תוייג משתמש תקין. הפעולה בוטלה.")
@@ -136,11 +133,9 @@ class TicketDropdown(Select):
         await ticket_channel.set_permissions(interaction.user, read_messages=True, send_messages=True)
         await ticket_channel.set_permissions(interaction.guild.get_role(ROLE_STAFF), read_messages=True, send_messages=True)
         await interaction.followup.send(f"✅ הטיקט נוצר! כנס לחדר: {ticket_channel.mention}", ephemeral=True)
-        
         log_ch = bot.get_channel(CHANNEL_TICKET_LOGS)
-        if log_ch: await log_ch.send(embed=discord.Embed(title="Chicago City", description=f"➕ **טיקט חדש נפתח**\n\n• פותח הפנייה: {interaction.user.mention}\n• נושא: `{self.values}`\n• חדר: {ticket_channel.mention}", color=discord.Color.green()))
-            
-        embed = discord.Embed(title="Chicago City", description=f"שלום {interaction.user.mention}, פנייתך בנושא `{self.values}` התקבלה!\nצוות השרת יגיע בהקדם.", color=discord.Color.red())
+        if log_ch: await log_ch.send(embed=discord.Embed(title="Chicago City", description=f"➕ **טיקט חדש נפתח**\n\n• פותח הפנייה: {interaction.user.mention}\n• נושא: `{self.values[0]}`\n• חדר: {ticket_channel.mention}", color=discord.Color.green()))
+        embed = discord.Embed(title="Chicago City", description=f"שלום {interaction.user.mention}, פנייתך בנושא `{self.values[0]}` התקבלה!\nצוות השרת יגיע בהקדם.", color=discord.Color.red())
         embed.set_footer(text="Chicago City")
         if interaction.guild.icon: embed.set_image(url=interaction.guild.icon.url)
         await ticket_channel.send(embed=embed, view=TicketControls())
@@ -153,8 +148,54 @@ async def setup_tickets(ctx):
     embed.set_footer(text="Chicago City")
     if ctx.guild.icon: embed.set_image(url=ctx.guild.icon.url)
     await ctx.send(embed=embed, view=View().add_item(TicketDropdown()))
+# --- מערכת הגרלות מתקדמת מבוססת פאנל וטפסים (GIVEAWAY MODAL SYSTEM) ---
+class GiveawayModal(Modal):
+    def __init__(self):
+        super().__init__(title="יצירת הגרלה חדשה — Chicago City")
+        self.prize = TextInput(label="מה הפרס של ההגרלה?", placeholder="לדוגמה: 500,000$ / רכב ספורט", required=True)
+        self.time = TextInput(label="זמן ריצה (בדקות)", placeholder="לדוגמה: 10", required=True)
+        self.winners = TextInput(label="כמות זוכים מוגדרת", placeholder="לדוגמה: 1", required=True)
+        self.add_item(self.prize)
+        self.add_item(self.time)
+        self.add_item(self.winners)
 
-# הגרלות
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        try:
+            duration = int(self.time.value)
+            winners_count = int(self.winners.value)
+        except ValueError:
+            return await interaction.followup.send("❌ שגיאה: נא להזין מספרים תקינים בשדות הזמן והזוכים!", ephemeral=True)
+
+        public_ch = bot.get_channel(CHANNEL_GIVEAWAY_PUBLIC)
+        if not public_ch:
+            return await interaction.followup.send("❌ שגיאה: ערוץ ההגרלות הציבורי לא נמצא.", ephemeral=True)
+
+        embed = discord.Embed(
+            title="Chicago City — Giveaway",
+            description=f"🏆 **פרס שווה:** `{self.prize.value}`\n👥 **כמות זוכים:** `{winners_count}`\n⏱️ **זמן לסיום:** `{duration}` דקות\n\nלחצו על הכפתור למטה כדי להירשם!",
+            color=discord.Color.gold()
+        )
+        embed.set_footer(text="Chicago City")
+        if interaction.guild.icon: embed.set_thumbnail(url=interaction.guild.icon.url)
+
+        view = AdvancedGiveawayView(self.prize.value, winners_count)
+        msg = await public_ch.send(embed=embed, view=view)
+        await interaction.followup.send(f"✅ ההגרלה נוצרה ופורסמה בהצלחה בערוץ {public_ch.mention}!", ephemeral=True)
+
+        await asyncio.sleep(duration * 60)
+        if view.active:
+            view.active = False
+            await end_gv(public_ch, self.prize.value, winners_count, view.entrants, msg)
+
+class GiveawayPanelView(View):
+    def __init__(self): super().__init__(timeout=None)
+    @discord.ui.button(label="צור הגרלה חדשה 🎁", style=discord.ButtonStyle.green, custom_id="gv_panel_btn")
+    async def create_gv(self, interaction: discord.Interaction, button: Button):
+        if interaction.guild.get_role(ROLE_STAFF) not in interaction.user.roles and not interaction.user.guild_permissions.administrator:
+            return await interaction.response.send_message("❌ אין לך הרשאה לפתוח פאנל זה!", ephemeral=True)
+        await interaction.response.send_modal(GiveawayModal())
+
 class AdvancedGiveawayView(View):
     def __init__(self, prize, winners):
         super().__init__(timeout=None)
@@ -186,38 +227,67 @@ async def end_gv(channel, prize, winners, entrants, msg):
         await channel.send(f"🎉 **מזל טוב לזוכים בהגרלה על {prize}!** {m}")
 
 @bot.command()
-@commands.has_permissions(manage_messages=True)
-async def giveaway(ctx, duration: int, winners: int, *, prize: str):
-    embed = discord.Embed(title="Chicago City", description=f"🏆 **פרס:** `{prize}`\n👥 **זוכים:** `{winners}`\n⏱️ **זמן:** `{duration}` דקות", color=discord.Color.gold())
-    embed.set_footer(text="Chicago City")
-    v = AdvancedGiveawayView(prize, winners)
-    msg = await bot.get_channel(CHANNEL_GIVEAWAY).send(embed=embed, view=v); await ctx.send("✅ ההגרלה שודרה בהצלחה!")
-    await asyncio.sleep(duration * 60)
-    if v.active: v.active = False; await end_gv(bot.get_channel(CHANNEL_GIVEAWAY), prize, winners, v.entrants, msg)
+@commands.has_permissions(administrator=True)
+async def setup_giveaway_panel(ctx):
+    embed = discord.Embed(title="Chicago City — Giveaway Control", description="מערכת ניהול ויצירת ההגרלות הרשמית של הצוות.\n\n**לחצו על הכפתור הירוק למטה כדי לפתוח את טופס יצירת ההגרלה!**", color=discord.Color.green())
+    embed.set_footer(text="Chicago City Staff Only")
+    await ctx.send(embed=embed, view=GiveawayPanelView())
 
-# אזהרות לצוות בלבד תחת הפקודה !warn
+# --- מערכת אזהרות לצוות מבוססת פאנל וטפסים (WARN MODAL SYSTEM) ---
+class WarnModal(Modal):
+    def __init__(self):
+        super().__init__(title="רישום אזהרה למנהל — Chicago City")
+        self.user_id = TextInput(label="איידי (ID) של איש הצוות", placeholder="הדבק כאן את האיידי של המנהל", required=True)
+        self.reason = TextInput(label="סיבת האזהרה", placeholder="לדוגמה: חוסר כבוד / אביוז", required=True)
+        self.add_item(self.user_id)
+        self.add_item(self.reason)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        try:
+            target_id = int(self.user_id.value)
+            member = interaction.guild.get_member(target_id)
+        except ValueError:
+            return await interaction.followup.send("❌ שגיאה: נא להזין איידי תקין (מספר בלבד)!", ephemeral=True)
+
+        if not member:
+            return await interaction.followup.send("❌ שגיאה: משתמש זה לא נמצא בשרת!", ephemeral=True)
+
+        if target_id not in staff_warns_db: staff_warns_db[target_id] = []
+        t = datetime.datetime.now().strftime("%d/%m/%Y | %H:%M")
+        staff_warns_db[target_id].append({"reason": self.reason.value, "by": interaction.user.id, "date": t})
+        count = len(staff_warns_db[target_id])
+
+        log_ch = bot.get_channel(CHANNEL_STAFF_WARNS_LOG)
+        if log_ch:
+            embed = discord.Embed(title="Chicago City", description="**רישום אזהרה לחבר צוות**", color=discord.Color.red())
+            embed.set_thumbnail(url=member.display_avatar.url)
+            embed.add_field(name="👤 המנהל שהוזהר", value=member.mention, inline=True)
+            embed.add_field(name="🛡️ האדמין המעניש", value=interaction.user.mention, inline=True)
+            embed.add_field(name="📅 זמן האירוע", value=f"`{t}`", inline=False)
+            embed.add_field(name="📝 סיבת האזהרה", value=f"```fix\n{self.reason.value}```", inline=False)
+            bars = "Core" if count > 3 else "🟥" * count + "⬛" * (3 - count)
+            embed.add_field(name="📊 תיק אזהרות", value=f"{bars} ({count}/3 אזהרות)", inline=False)
+            embed.set_footer(text="Chicago City")
+            if interaction.guild.icon: embed.set_image(url=interaction.guild.icon.url)
+            await log_ch.send(embed=embed)
+
+        await interaction.followup.send(f"✅ האזהרה נרשמה בהצלחה ל-{member.name} ורישום נשלח לערוץ הלוגים!", ephemeral=True)
+
+class WarnPanelView(View):
+    def __init__(self): super().__init__(timeout=None)
+    @discord.ui.button(label="רשום אזהרה למנהל ⚠️", style=discord.ButtonStyle.red, custom_id="warn_panel_btn")
+    async def give_warn(self, interaction: discord.Interaction, button: Button):
+        if interaction.guild.get_role(ROLE_WARN_ADMIN) not in interaction.user.roles and not interaction.user.guild_permissions.administrator:
+            return await interaction.response.send_message("❌ אבטחה: פעולה זו חסומה! מיועד לדרג ניהול עליון בלבד.", ephemeral=True)
+        await interaction.response.send_modal(WarnModal())
+
 @bot.command()
-async def warn(ctx, member: discord.Member, *, reason: str = "לא צוינה סיבה"):
-    if ctx.guild.get_role(ROLE_WARN_ADMIN) not in ctx.author.roles and not ctx.author.guild_permissions.administrator:
-        return await ctx.send("❌ **אין לך הרשאה לבצע פעולה זו!**")
-    if member.id not in staff_warns_db: staff_warns_db[member.id] = []
-    t = datetime.datetime.now().strftime("%d/%m/%Y | %H:%M")
-    staff_warns_db[member.id].append({"reason": reason, "by": ctx.author.id, "date": t})
-    count = len(staff_warns_db[member.id])
-    log_ch = bot.get_channel(CHANNEL_STAFF_WARNS_LOG)
-    if log_ch:
-        embed = discord.Embed(title="Chicago City", description="**רישום אזהרה לחבר צוות**", color=discord.Color.red())
-        embed.set_thumbnail(url=member.display_avatar.url)
-        embed.add_field(name="👤 המנהל שהוזהר", value=member.mention, inline=True)
-        embed.add_field(name="🛡️ האדמין המעניש", value=ctx.author.mention, inline=True)
-        embed.add_field(name="📅 זמן האירוע", value=f"`{t}`", inline=False)
-        embed.add_field(name="📝 סיבת האזהרה", value=f"```fix\n{reason}```", inline=False)
-        bars = "Core" if count > 3 else "🟥" * count + "⬛" * (3 - count)
-        embed.add_field(name="📊 תיק אזהרות", value=f"{bars} ({count}/3 אזהרות)", inline=False)
-        embed.set_footer(text="Chicago City")
-        if ctx.guild.icon: embed.set_image(url=ctx.guild.icon.url)
-        await log_ch.send(embed=embed)
-    await ctx.send(f"✅ **האזהרה נרשמה בהצלחה בלוג!** (סה''כ: `{count}`)")
+@commands.has_permissions(administrator=True)
+async def setup_warn_panel(ctx):
+    embed = discord.Embed(title="Chicago City — Warn Control", description="פאנל אבטחה חסוי לניהול ורישום משמעת בצוות.\n\n**רק דרג ניהול עליון מורשה ללחוץ על הכפתור האדום למטה ולרשום אזהרה!**", color=discord.Color.red())
+    embed.set_footer(text="Chicago City Management Only")
+    await ctx.send(embed=embed, view=WarnPanelView())
 
 @bot.command()
 async def warns(ctx, member: discord.Member):
@@ -236,7 +306,46 @@ async def unwarn(ctx, member: discord.Member):
         staff_warns_db[member.id].pop(); await ctx.send(f"✅ האזהרה האחרונה של {member.mention} נמחקה.")
     else: await ctx.send("אין אזהרות בתיק.")
 
-# מערכת כריזה
+# מערכת הצעות מטורפת (SUGGESTIONS SYSTEM)
+CHANNEL_SUGG_PANEL = 1507020507776811068
+CHANNEL_SUGG_LOGS = 1483039217482334253
+
+class SuggestionModal(Modal):
+    def __init__(self):
+        super().__init__(title="הגשת הצעה חדשה — Chicago City")
+        self.sugg = TextInput(label="פרט את ההצעה שלך לעיר", style=discord.TextStyle.paragraph, placeholder="רשום כאן את הצעתך בצורה ברורה...", required=True)
+        self.add_item(self.sugg)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        log_ch = bot.get_channel(CHANNEL_SUGG_LOGS)
+        if not log_ch: return await interaction.followup.send("❌ ערוץ הלוגים של ההצעות לא נמצא.", ephemeral=True)
+        
+        embed = discord.Embed(title="Chicago City — Suggestion", description=f"💡 **הצעה חדשה עלתה לעיר!**\n\n```{self.sugg.value}```", color=discord.Color.blue())
+        embed.add_field(name="👤 הוגש על ידי", value=interaction.user.mention, inline=True)
+        embed.set_footer(text="Chicago City Suggestions")
+        if interaction.guild.icon: embed.set_thumbnail(url=interaction.guild.icon.url)
+        
+        msg = await log_ch.send(embed=embed)
+        await msg.add_reaction("👍")
+        await msg.add_reaction("👎")
+        await interaction.followup.send("✅ ההצעה שלך נשלחה בהצלחה לערוץ ההצעות ונוספו לה תגובות! תודה 🎉", ephemeral=True)
+
+class SuggestionPanelView(View):
+    def __init__(self): super().__init__(timeout=None)
+    @discord.ui.button(label="לחצו להגשת הצעה לעיר 💡", style=discord.ButtonStyle.blurple, custom_id="sugg_panel_btn")
+    async def add_sugg(self, interaction: discord.Interaction, button: Button):
+        await interaction.response.send_modal(SuggestionModal())
+
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def setup_suggestions(ctx):
+    embed = discord.Embed(title="Chicago City Suggestions", description="יש לכם רעיון מטורף לשדרוג העיר, הצעה לרכב חדש או מערכת שווה?\n\n**לחצו על הכפתור הכחול למטה כדי לפתוח את טופס ההצעות הרשמי!**", color=discord.Color.blue())
+    embed.set_footer(text="Chicago City")
+    if ctx.guild.icon: embed.set_image(url=ctx.guild.icon.url)
+    await ctx.send(embed=embed, view=SuggestionPanelView())
+
+# פקודת say
 @bot.command()
 @commands.has_permissions(administrator=True)
 async def say(ctx, channel: discord.TextChannel, em: str, *, content: str):
@@ -271,47 +380,7 @@ class FiveMConnectView(View):
         super().__init__(timeout=None)
         self.add_item(discord.ui.Button(label="התחברות ישירה לעיר 🚀", style=discord.ButtonStyle.link, url="https://cfx.re"))
 
-# --- מערכת הצעות מטורפת (SUGGESTIONS SYSTEM) ---
-class SuggestionModal(Modal):
-    def __init__(self):
-        super().__init__(title="Chicago City — טופס הצעה")
-        self.title_input = TextInput(label="כותרת ההצעה שלך:", placeholder="רשום בקצרה על מה ההצעה...", max_length=100)
-        self.desc_input = TextInput(label="פירוט ההצעה במלואה:", style=discord.TextStyle.paragraph, placeholder="פרט כאן כמה שיותר מידע על הרעיון שלך...", max_length=1000)
-        self.add_item(self.title_input)
-        self.add_item(self.desc_input)
-
-    async def on_submit(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=True)
-        log_ch = bot.get_channel(CHANNEL_SUGGEST_LOGS)
-        if not log_ch: return await interaction.followup.send("❌ שגיאה: ערוץ לוג ההצעות לא נמצא.", ephemeral=True)
-        
-        embed = discord.Embed(title="💡 הצעה חדשה עלתה לעיר!", color=discord.Color.from_rgb(241, 196, 15), timestamp=datetime.datetime.utcnow())
-        embed.set_thumbnail(url=interaction.user.display_avatar.url)
-        embed.add_field(name="👤 המציע הרשמי:", value=interaction.user.mention, inline=True)
-        embed.add_field(name="📌 נושא ההצעה:", value=f"`{self.title_input.value}`", inline=True)
-        embed.add_field(name="📝 פירוט הרעיון:", value=f"```\n{self.desc_input.value}```", inline=False)
-        embed.set_footer(text="Chicago City Suggestions Desk")
-        
-        msg = await log_ch.send(embed=embed)
-        await msg.add_reaction("👍")
-        await msg.add_reaction("👎")
-        await interaction.followup.send("✅ ההצעה שלך נשלחה בהצלחה רבה ועברה להצבעת הקהילה! תודה!", ephemeral=True)
-
-class SuggestionPanel(View):
-    def __init__(self): super().__init__(timeout=None)
-    @discord.ui.button(label="שלח הצעה חדשה 📝", style=discord.ButtonStyle.blurple, custom_id="send_sug_btn")
-    async def send_sug(self, interaction: discord.Interaction, button: Button):
-        await interaction.response.send_modal(SuggestionModal())
-
-@bot.command()
-@commands.has_permissions(administrator=True)
-async def setup_suggestions(ctx):
-    embed = discord.Embed(title="Chicago City Suggestions room", description="יש לכם רעיון מטורף שיכול לשדרג את העיר?\nרוצים להציע רכב חדש, חוק או מערכת מעניינת?\n\n**לחצו על הכפתור הכחול למטה, מלאו את הטופס וההצעה שלכם תעבור מייד להצבעת האזרחים!**", color=discord.Color.gold())
-    embed.set_footer(text="Chicago City")
-    if ctx.guild.icon: embed.set_image(url=ctx.guild.icon.url)
-    await ctx.send(embed=embed, view=SuggestionPanel())
-
-# --- משימת הסטטוס המאוחדת (UDP SOCKET PING) ---
+# משימת הסטטוס המאוחדת – פונה לשרת FiveM של דיסקורד ישירות
 @tasks.loop(minutes=2)
 async def update_fivem_status():
     global fivem_msg_id
@@ -326,34 +395,25 @@ async def update_fivem_status():
 
     status_str, players_str, staff_str, color = "🔴 מנותק (Offline)", "0 / 0", "0 מחוברים", discord.Color.red()
     
-    loop = asyncio.get_event_loop()
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    s.settimeout(2.5)
-    try:
-        await loop.run_in_executor(None, s.sendto, b'\xff\xff\xff\xffping\x00', (FIVEM_IP_ONLY, FIVEM_PORT_ONLY))
-        data, _ = await loop.run_in_executor(None, s.recvfrom, 1024)
-        if data:
-            status_str = "🟢 מקוון (Online)"
-            color = discord.Color.green()
-            
-            headers = {"User-Agent": "Mozilla/5.0"}
-            async with aiohttp.ClientSession(headers=headers) as session:
-                async with session.get(f"https://fivem.net{CFX_ID}", timeout=4) as resp:
-                    if resp.status == 200:
-                        res_data = await resp.json()
-                        server_data = res_data.get("Data", {})
-                        players_list = server_data.get("players", [])
-                        players_str = f"{len(players_list)} / {server_data.get('sv_maxclients', 64)}"
-                        
-                        fivem_identifiers = []
-                        for player in players_list:
-                            for identifier in player.get('identifiers', []):
-                                if identifier.startswith('discord:'):
-                                    fivem_identifiers.append(int(identifier.replace('discord:', '')))
-                        staff_game_count = sum(1 for m in staff_role.members if m.id in fivem_identifiers) if staff_role else 0
-                        staff_str = f"{staff_game_count} אנשי צוות בעיר"
-    except: pass
-    finally: s.close()
+    headers = {"User-Agent": "Mozilla/5.0"}
+    async with aiohttp.ClientSession(headers=headers) as session:
+        try:
+            async with session.get(f"https://fivem.net{CFX_ID}", timeout=5) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    server_data = data.get("Data", {})
+                    status_str = "🟢 מקוון (Online)"
+                    color = discord.Color.green()
+                    players_list = server_data.get("players", [])
+                    players_str = f"{len(players_list)} / {server_data.get('sv_maxclients', 64)}"
+                    fivem_identifiers = []
+                    for player in players_list:
+                        for identifier in player.get('identifiers', []):
+                            if identifier.startswith('discord:'):
+                                fivem_identifiers.append(int(identifier.replace('discord:', '')))
+                    staff_game_count = sum(1 for m in staff_role.members if m.id in fivem_identifiers) if staff_role else 0
+                    staff_str = f"{staff_game_count} אנשי צוות בעיר"
+        except: pass
 
     embed = discord.Embed(title="Chicago City — Status", color=color, timestamp=datetime.datetime.utcnow())
     embed.add_field(name="🎮 FIVEM STATUS", value=f"• סטטוס השרת: `{status_str}`\n• שחקנים בעיר: `{players_str}`\n• צוות בתוך העיר: `{staff_str}`", inline=False)
@@ -376,7 +436,6 @@ async def update_fivem_status():
 @bot.event
 async def on_ready():
     print(f"Logged in as {bot.user.name}")
-    bot.add_view(SuggestionPanel()) # נעילת הכפתור של ההצעות שיעבוד גם אחרי ריסטרט!
     if not update_fivem_status.is_running(): update_fivem_status.start()
 
 keep_alive()
