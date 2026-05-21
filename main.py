@@ -26,6 +26,7 @@ intents.message_content = True
 intents.members = True
 intents.guilds = True
 intents.messages = True
+intents.presences = True # חובה בשביל לזהות מתי אנשים עולים לסטרים!
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
@@ -33,6 +34,10 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 ROLE_VERIFIED = 1483039214793789489
 ROLE_STAFF = 1483039215364345930
 CHANNEL_GIVEAWAY = 1483039216366780532
+
+# איידיז חדשים למערכת המדיה המטורפת שלכם
+ROLE_MEDIA = 1504583182400618598
+CHANNEL_MEDIA_ALERTS = 1483039216832086120
 
 LOG_CHANNELS = {
     "channel_create": 1483039219654852617,
@@ -53,6 +58,7 @@ LOG_CHANNELS = {
 
 warnings_db = {}
 invites_cache = {}
+active_streams = [] # שומר את הסטרימרים שכבר באוויר כדי למנוע ספאם של הודעות
 
 # מערכת אימות (VERIFICATION)
 class VerifyView(View):
@@ -181,11 +187,11 @@ async def setup_tickets(ctx):
         description="```📊 מערכת ניהול הפניות והתמיכה של השרת```\n\nצריכים עזרה, רוצים לדווח על באג או להגיש מועמדות לצוות הניהול?\n\n**בחר את המחלקה המתאימה בתפריט למטה והבוט יפתח עבורך חדר מאובטח מול הצוות!**",
         color=discord.Color.from_rgb(155, 89, 182)
     )
-    embed.set_image(url="https://discordapp.net&")
+    embed.set_image(url="https://discordapp.com&")
     embed.set_footer(text="Chicago City Support Operations", icon_url=ctx.guild.icon.url if ctx.guild.icon else None)
     await ctx.send(embed=embed, view=TicketDropdownView())
 
-# --- מערכת הגרלות משודרגת עם פאנל ניהול (ADVANCED GIVEAWAY SYSTEM) ---
+# מערכת הגרלות (GIVEAWAYS)
 class AdvancedGiveawayView(View):
     def __init__(self, prize, winners_count):
         super().__init__(timeout=None)
@@ -264,7 +270,6 @@ async def giveaway(ctx, duration: int, winners: int, *, prize: str):
     msg = await channel.send(embed=embed, view=gv_view)
     await ctx.send(f"✅ ההגרלה שודרה בהצלחה בערוץ {channel.mention}!")
     
-    # טיימר אוטומטי למקרה שהצוות לא סגר ידנית קודם לכן
     await asyncio.sleep(duration * 60)
     if gv_view.active:
         gv_view.active = False
@@ -349,7 +354,7 @@ async def on_member_unban(guild, user):
 
 @bot.event
 async def on_guild_role_create(role):
-    embed = discord.Embed(title="✨ רול חדש נוצר", description=f"שם הרול: {role.name}\nאיידי: {role.id}", color=discord.Color.teal())
+    embed = discord.Embed(title="✨ רול חדש נוצר", description=f"שם הרול: {role.name}\nאיידי: {role.id}", color=teal())
     await send_log("role_create", embed)
 
 @bot.event
@@ -369,6 +374,7 @@ async def on_message_delete(message):
     embed = discord.Embed(title="🗑️ הודעה נמחקה", description=f"**כותב ההודעה:** {message.author.mention}\n**ערוץ:** {message.channel.mention}\n\n**תוכן ההודעה:**\n{message.content}", color=discord.Color.red())
     await send_log("message_delete", embed)
 
+# מערכת וולקם (WELCOME)
 @bot.event
 async def on_member_join(member):
     embed = discord.Embed(title="📥 משתמש חדש נכנס", description=f"משתמש: {member.mention}\nשם משתמש: {member.name}\nאיידי: {member.id}", color=discord.Color.green())
@@ -424,17 +430,41 @@ async def on_member_remove(member):
     embed = discord.Embed(title="📤 משתמש עזב את השרת", description=f"משתמש: {member.mention}\nשם: {member.name}", color=discord.Color.light_grey())
     await send_log("member_leave", embed)
 
+# --- מערכת התראות לייב מטורפת ומקצועית (STREAM ALERTS SYSTEM) ---
 @bot.event
-async def on_ready():
-    print(f"Logged in as {bot.user.name}")
-    print("Serving Chicago City Server")
-    for guild in bot.guilds:
-        try:
-            invites = await guild.invites()
-            invites_cache[guild.id] = {invite.code: invite.uses for invite in invites}
-        except: pass
-    print("Invite cache seeded for Chicago City")
+async def on_presence_update(before, after):
+    # ודא שיש למשתמש את רול המדיה המיוחד שלכם!
+    media_role = after.guild.get_role(ROLE_MEDIA)
+    if not media_role or media_role not in after.roles:
+        return
 
-keep_alive()
+    # בודק אם הוא התחיל לשדר בלייב כרגע
+    is_streaming = False
+    stream_activity = None
+    for activity in after.activities:
+        if activity.type == discord.ActivityType.streaming:
+            is_streaming = True
+            stream_activity = activity
+            break
 
-bot.run(os.environ['DISCORD_TOKEN'])
+    alert_channel = bot.get_channel(CHANNEL_MEDIA_ALERTS)
+    if not alert_channel:
+        return
+
+    if is_streaming:
+        if after.id not in active_streams:
+            active_streams.append(after.id) # נועל כדי למנוע ספאם
+            
+            # כרטיס שידור בעיצוב מטורף לגמרי!
+            embed = discord.Embed(
+                title=f"🎥 LIVE ALERT — {after.name.upper()} IS LIVE!",
+                description=f"תוכן מוביל של **Chicago City** עלה לשידור ישיר ברגע זה!\nכנסו לעודד, לתמוך ולצפות ב-Roleplay איכותי.",
+                color=discord.Color.from_rgb(145, 70, 255), # צבע סגול טוויץ' רשמי
+                timestamp=datetime.datetime.utcnow()
+            )
+            embed.add_field(name="👤 סטרימר", value=after.mention, inline=True)
+            embed.add_field(name="🎮 משחק", value=f"`{stream_activity.game if stream_activity.game else 'FiveM'}`", inline=True)
+            embed.add_field(name="📢 כותרת השידור", value=f"```text\n{stream_activity.name}```", inline=False)
+            embed.set_thumbnail(url=after.display_avatar.url)
+            # שימוש ברקע היהלומים שלכם מתחת ללייב!
+            embed.set_image(url="https://discordapp.com
