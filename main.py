@@ -222,7 +222,13 @@ async def on_member_join(member):
         if member.guild.icon: embed.set_image(url=member.guild.icon.url)
         await w_ch.send(embed=embed)
 
-# --- משימה מאוחדת לריכוז כל הסטטיסטיקות (FIVEM & DISCORD LIVE STATUS) ---
+# --- משימה מאוחדת ומעוצבת עם כפתור חיבור ישיר (STATUS TRACKER + CONNECT BUTTON) ---
+class FiveMConnectView(View):
+    def __init__(self): super().__init__(timeout=None)
+    # יצירת כפתור רשמי שפותח את המשחק ומחבר את המשתמש ישירות לעיר!
+    @discord.ui.button(label="התחברות ישירה לעיר 🚀", style=discord.ButtonStyle.premium, url=f"https://cfx.re", custom_id="fivem_conn_btn")
+    async def connect_button(self, interaction: discord.Interaction, button: Button): pass
+
 @tasks.loop(minutes=5)
 async def update_fivem_status():
     global fivem_msg_id
@@ -230,17 +236,12 @@ async def update_fivem_status():
     if not ch: return
     
     guild = ch.guild
-    
-    # 1. חישוב נתוני דיסקורד חים בשבילך!
     total_dc_members = guild.member_count
     online_dc_users = sum(1 for m in guild.members if m.status != discord.Status.offline and not m.bot)
     
     staff_role = guild.get_role(ROLE_STAFF)
-    staff_dc_online = 0
-    if staff_role:
-        staff_dc_online = sum(1 for m in staff_role.members if m.status != discord.Status.offline and not m.bot)
+    staff_dc_online = sum(1 for m in staff_role.members if m.status != discord.Status.offline and not m.bot) if staff_role else 0
 
-    # 2. חישוב נתוני שרת FiveM
     status_str, players_str, staff_str, color = "🔴 מנותק (Offline)", "0 / 0", "0 מחוברים", discord.Color.red()
     
     async with aiohttp.ClientSession() as session:
@@ -260,34 +261,28 @@ async def update_fivem_status():
                             if identifier.startswith('discord:'):
                                 fivem_identifiers.append(int(identifier.replace('discord:', '')))
                                 
-                    staff_game_count = 0
-                    if staff_role:
-                        staff_game_count = sum(1 for m in staff_role.members if m.id in fivem_identifiers)
+                    staff_game_count = sum(1 for m in staff_role.members if m.id in fivem_identifiers) if staff_role else 0
                     staff_str = f"{staff_game_count} אנשי צוות בעיר"
         except: pass
 
-    # עיצוב טבלה מרוכזת, נקייה ומטורפת שמציגה את הכל במקום אחד!
+    # עיצוב מטורף ונקי של הטבלה המשותפת
     embed = discord.Embed(title="Chicago City — Status", color=color, timestamp=datetime.datetime.utcnow())
-    
-    # חלק א׳: נתוני ה-FiveM
     embed.add_field(name="🎮 FIVEM STATUS", value=f"• סטטוס השרת: `{status_str}`\n• שחקנים בעיר: `{players_str}`\n• צוות בתוך העיר: `{staff_str}`", inline=False)
-    
-    # חלק ב׳: הטבלה של הדיסקורד שביקשת!
-    embed.add_field(name="💬 DISCORD STATUS", value=f"• סך הכל תישבים: `{total_dc_members} אזרחים`\n• משתמשים אונליין: `{online_dc_users} מחוברים`\n• אנשי צוות אונליין: `{staff_dc_online} זמינים`", inline=False)
-    
-    embed.set_footer(text="Chicago City")
+    embed.add_field(name="💬 DISCORD STATUS", value=f"• סך הכל תושבים: `{total_dc_members} אזרחים`\n• משתמשים אונליין: `{online_dc_users} מחוברים`\n• אנשי צוות אונליין: `{staff_dc_online} זמינים`", inline=False)
+    embed.set_footer(text="Chicago City • ערוץ סטטוס רשמי")
     if guild.icon: embed.set_thumbnail(url=guild.icon.url)
 
+    # שליחה מבוקרת עם ה-Connect Button המובנה למטה!
     try:
         if fivem_msg_id is None:
             async for m in ch.history(limit=5):
                 if m.author == bot.user and m.embeds and m.embeds.title == "Chicago City — Status":
-                    fivem_msg_id = m.id; await m.edit(embed=embed); return
-            msg = await ch.send(embed=embed)
+                    fivem_msg_id = m.id; await m.edit(embed=embed, view=FiveMConnectView()); return
+            msg = await ch.send(embed=embed, view=FiveMConnectView())
             fivem_msg_id = msg.id
         else:
             msg = await ch.fetch_message(fivem_msg_id)
-            await msg.edit(embed=embed)
+            await msg.edit(embed=embed, view=FiveMConnectView())
     except:
         fivem_msg_id = None
 
