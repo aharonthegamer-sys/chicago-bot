@@ -402,7 +402,7 @@ class FiveMConnectView(View):
         super().__init__(timeout=None)
         self.add_item(discord.ui.Button(label="🚀 התחברות ישירה לעיר!", style=discord.ButtonStyle.link, url="https://cfx.re"))
 
-# משימת הסטטוס החכמה והעוקפת – מציגה סטטוס Watching קבוע בשיקגו בוט כשהעיר סגורה!
+# משימת הסטטוס המאוחדת והצבעונית כל 2 דקות - הגנת רשת חסינת באגים!
 @tasks.loop(minutes=2)
 async def update_fivem_status():
     global fivem_msg_id
@@ -416,7 +416,6 @@ async def update_fivem_status():
 
     status_str, players_str, staff_str, color = "🔴 מנותק (Offline)", "0 / 0", "0 מחוברים", discord.Color.red()
     
-    # בדיקת סנכרון רשת מהירה
     headers = {"User-Agent": "Mozilla/5.0"}
     async with aiohttp.ClientSession(headers=headers) as session:
         try:
@@ -424,44 +423,53 @@ async def update_fivem_status():
                 if resp.status == 200:
                     data = await resp.json()
                     server_data = data.get("Data", {})
-                    status_str = "🟢 מקוון (Online)"
-                    color = discord.Color.green()
-                    players_list = server_data.get("players", [])
-                    max_clients = server_data.get('sv_maxclients', 64)
-                    players_str = f"{len(players_list)} / {max_clients}"
+                    max_clients = server_data.get('sv_maxclients', 0)
                     
-                    # הפעלת סטטוס חצי חיוני בזמן שהעיר פתוחה
-                    activity = discord.Activity(type=discord.ActivityType.watching, name=f"Chicago City: {len(players_list)} / {max_clients} 🎮")
-                    await bot.change_presence(activity=activity)
-                    
-                    fivem_identifiers = []
-                    for player in players_list:
-                        for identifier in player.get('identifiers', []):
-                            if identifier.startswith('discord:'):
-                                fivem_identifiers.append(int(identifier.replace('discord:', '')))
-                    staff_str = f"{sum(1 for m in staff_role.members if m.id in fivem_identifiers)} אנשי צוות" if staff_role else "0 אנשי צוות"
+                    # פקודת ההגנה: אם המקסימום הוא 0 או שאין הגדרה, השרת שלכם מכובה וסגור כעת במכונה!
+                    if max_clients > 0:
+                        status_str = "🟢 מקוון (Online)"
+                        color = discord.Color.green()
+                        players_list = server_data.get("players", [])
+                        players_str = f"{len(players_list)} / {max_clients}"
+                        
+                        activity = discord.Activity(type=discord.ActivityType.watching, name=f"City: {len(players_list)} / {max_clients} 🎮")
+                        await bot.change_presence(activity=activity)
+                        
+                        fivem_identifiers = []
+                        for player in players_list:
+                            for identifier in player.get('identifiers', []):
+                                if identifier.startswith('discord:'):
+                                    fivem_identifiers.append(int(identifier.replace('discord:', '')))
+                        staff_str = f"{sum(1 for m in staff_role.members if m.id in fivem_identifiers)} אנשי צוות" if staff_role else "0 אנשי צוות"
+                    else:
+                        # שרת סגור - מעביר אוטומטית לאופליין אדום ולסטטוס Watching שם השרת!
+                        status_str = "🔴 מנותק (Offline)"
+                        color = discord.Color.red()
+                        activity = discord.Activity(type=discord.ActivityType.watching, name="Chicago City 🎮")
+                        await bot.change_presence(activity=activity)
                 else:
-                    # פקודת זהב: אם השרת סגור, שיקגו בוט יקבל סטטוס WATCHING קבוע בצד ימין!
                     activity = discord.Activity(type=discord.ActivityType.watching, name="Chicago City 🎮")
                     await bot.change_presence(activity=activity)
         except:
-            # פקודת הגנה עוקפת חומות אש למצב אופליין
             activity = discord.Activity(type=discord.ActivityType.watching, name="Chicago City 🎮")
             await bot.change_presence(activity=activity)
 
-    embed = discord.Embed(title="📊 רשת הניטור הרשמית ➔ CHICAGO CITY 💎", color=color, timestamp=datetime.datetime.utcnow())
-    embed.add_field(name="🎮 FIVEM METRICS", value=f"```ansi\n• סטטוס: {status_str}\n• שחקנים: {players_str}\n• צוות בעיר: {staff_str}```", inline=False)
-    embed.add_field(name="💬 DISCORD METRICS", value=f"```ansi\n• תושבים: {total_dc_members}\n• אונליין: {online_dc_users}\n• צוות זמין: {staff_dc_online}```", inline=False)
+    embed = discord.Embed(title="📊 רשת הניטור והסטטיסטיקות הרשמית ➔ CHICAGO CITY 💎", color=color, timestamp=datetime.datetime.utcnow())
+    embed.add_field(name="🎮 FIVEM GAME SERVER METRICS", value=f"```ansi\n• סטטוס השרת באוויר: {status_str}\n• שחקנים מחוברים בעיר: {players_str}\n• אנשי צוות בעיר: {staff_str}```", inline=False)
+    embed.add_field(name="💬 DISCORD NETWORK METRICS", value=f"```ansi\n• סך הכל תתושבים: {total_dc_members} אזרחים\n• אזרחים מחוברים כרגע: {online_dc_users}\n• אנשי צוות זמינים: {staff_dc_online} אונליין```", inline=False)
+    embed.set_footer(text="Chicago City • Live Statistics Network Dashboard")
     if guild.icon: embed.set_thumbnail(url=guild.icon.url)
 
     try:
         if fivem_msg_id is None:
             async for m in ch.history(limit=5):
-                if m.author == bot.user and m.embeds and m.embeds.title == "📊 רשת הניטור הרשמית ➔ CHICAGO CITY 💎":
+                if m.author == bot.user and m.embeds and m.embeds.title == "📊 רשת הניטור והסטטיסטיקות הרשמית ➔ CHICAGO CITY 💎":
                     fivem_msg_id = m.id; await m.edit(embed=embed, view=FiveMConnectView()); return
-            msg = await ch.send(embed=embed, view=FiveMConnectView()); fivem_msg_id = msg.id
+            msg = await ch.send(embed=embed, view=FiveMConnectView())
+            fivem_msg_id = msg.id
         else:
-            msg = await ch.fetch_message(fivem_msg_id); await msg.edit(embed=embed, view=FiveMConnectView())
+            msg = await ch.fetch_message(fivem_msg_id)
+            await msg.edit(embed=embed, view=FiveMConnectView())
     except: fivem_msg_id = None
 
 keep_alive()
