@@ -1,7 +1,7 @@
 import discord
 from discord.ext import commands, tasks
 from discord.ui import Button, View, Select, Modal, TextInput, UserSelect
-import asyncio, datetime, os, random, aiohttp
+import asyncio, datetime, os, random, aiohttp, socket
 from flask import Flask
 from threading import Thread
 
@@ -13,21 +13,24 @@ def keep_alive(): Thread(target=run).start()
 
 intents = discord.Intents.default()
 intents.message_content = intents.members = intents.guilds = intents.messages = intents.presences = True
+intents.invites = True # הפעלת אינטנט הזמנות חיוני למערכת האינוויטס החדשה!
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 # איידיז קבועים — CHICAGO CITY
 ROLE_VERIFIED = 1483039214793789489
 ROLE_STAFF = 1483039215364345930
-ROLE_WARN_ADMIN = 1483039215393702012 # רול מנהל עליון מורשה לווארנים
+ROLE_WARN_ADMIN = 1483039215393702012 
 
 CHANNEL_GIVEAWAY_PANEL = 1507022943413342328 
 CHANNEL_GIVEAWAY_PUBLIC = 1483039216366780532 
-
-CHANNEL_WARN_PANEL = 1507023136095207515 # חדר פאנל אזהרות למנהלים
-CHANNEL_STAFF_WARNS_LOG = 1483039219336347810 # חדר לוג אזהרות צוות
-
+CHANNEL_WARN_PANEL = 1507023136095207515 
+CHANNEL_STAFF_WARNS_LOG = 1483039219336347810 
 CHANNEL_FIVEM_STATUS = 1506965475270332476 
 CHANNEL_TICKET_LOGS = 1483039219654852612
+CHANNEL_INVITE_LOGS = 1506417177719210194 # חדר האיידי של האינוויט מהתמונה שלך!
+
+FIVEM_IP_ONLY = "135.148.36.192"
+FIVEM_PORT_ONLY = 30125
 CFX_ID = "rmadb7p"
 
 LOG_CHANNELS = {
@@ -36,7 +39,7 @@ LOG_CHANNELS = {
     "unban": 1483039219923554470, "role_create": 1483039219923554471,
     "role_delete": 1483039219923554472, "message_edit": 1483039219923554473,
     "message_delete": 1483039219923554474, "welcome_embed": 1504124994999943269,
-    "invite_tracker": 1506417177719210194, "security": 1483039220284002367
+    "security": 1483039220284002367
 }
 
 staff_warns_db, invites_cache = {}, {}
@@ -101,7 +104,7 @@ class TicketControls(View):
         try:
             msg = await bot.wait_for('message', check=check, timeout=30)
             if msg.mentions:
-                target = msg.mentions[0]
+                target = msg.mentions
                 await interaction.channel.set_permissions(target, read_messages=True, send_messages=True)
                 await interaction.channel.send(f"✅ המשתמש {target.mention} הוסף בהצלחה לכרטיס התמיכה הנוכחי!")
             else: await interaction.channel.send("❌ לא תוייג משתמש תקין. הפעולה בוטלה.")
@@ -288,7 +291,6 @@ class WarnUserSelect(UserSelect):
 
 class WarnPanelView(View):
     def __init__(self): super().__init__(timeout=None)
-    
     @discord.ui.button(label="רשום אזהרה למנהל ⚠️", style=discord.ButtonStyle.red, custom_id="wp_add")
     async def add_warn_btn(self, interaction: discord.Interaction, button: Button):
         if interaction.guild.get_role(ROLE_WARN_ADMIN) not in interaction.user.roles and not interaction.user.guild_permissions.administrator:
@@ -377,8 +379,24 @@ async def on_message_delete(m):
     if m.author.bot: return
     await send_log("message_delete", discord.Embed(title="Chicago City", description=f"🗑️ הודעה נמחקה ע''י {m.author.mention}\nחדר: {m.channel.mention}\nתוכן: {m.content}", color=discord.Color.red()))
 
+# --- מנוע ה-INVITE TRACKER המטורף והמעוצב מהתמונה שלך (AUTOMATIC DISCORD INVITE ENGINE) ---
+async def fetch_invites(guild):
+    try: return {invite.code: invite for invite in await guild.invites()}
+    except: return {}
+
+@bot.event
+async def on_guild_join(guild):
+    invites_cache[guild.id] = await fetch_invites(guild)
+
+@bot.event
+async def on_ready():
+    print(f"Logged in as {bot.user.name}")
+    for guild in bot.guilds: invites_cache[guild.id] = await fetch_invites(guild)
+    if not update_fivem_status.is_running(): update_fivem_status.start()
+
 @bot.event
 async def on_member_join(member):
+    # שולח וולקם כרגיל
     w_ch = bot.get_channel(LOG_CHANNELS["welcome_embed"])
     if w_ch:
         embed = discord.Embed(title="Chicago City", description=f"💎 ברוך הבא, {member.name}! 💎\nכנס לערוץ האימות לקבלת גישה: <#{ROLE_VERIFIED}> 🛡️", color=discord.Color.red())
@@ -386,12 +404,41 @@ async def on_member_join(member):
         if member.guild.icon: embed.set_image(url=member.guild.icon.url)
         await w_ch.send(embed=embed)
 
+    # הרצת מנוע מעקב ההזמנות המעוצב בדיוק לפי התמונה!
+    log_ch = bot.get_channel(CHANNEL_INVITE_LOGS)
+    if not log_ch: return
+    
+    old_invites = invites_cache.get(member.guild.id, {})
+    new_invites = await fetch_invites(member.guild)
+    invites_cache[member.guild.id] = new_invites
+    
+    inviter_str, code_str, total_str = "לא ידוע / קישור ישיר 🔗", "לא ידוע 🔒", "0"
+    
+    for code in old_invites:
+        if code in new_invites and old_invites[code].uses < new_invites[code].uses:
+            inviter = old_invites[code].inviter
+            inviter_str = inviter.mention
+            code_str = f"`{code}`"
+            
+            # חישוב סך כל ההזמנות של אותו מנהל/משתמש בשרת
+            total_uses = sum(inv.uses for inv in new_invites.values() if inv.inviter and inv.inviter.id == inviter.id)
+            total_str = f"`{total_uses}`"
+            break
+            
+    embed = discord.Embed(title="📥 הצטרפות חדשה - מעקב הזמנות", color=discord.Color.from_rgb(142, 68, 173))
+    embed.add_field(name="👤 המשתמש שהצטרף", value=member.mention, inline=False)
+    embed.add_field(name="🤝 הוזמן על ידי", value=inviter_str, inline=True)
+    embed.add_field(name="📊 סך הכל ההזמנות שלו", value=f"{total_str} הזמנות", inline=True)
+    embed.set_footer(text=f"Chicago City Invite Tracker • ID: {member.id}")
+    if member.guild.icon: embed.set_thumbnail(url=member.guild.icon.url)
+    await log_ch.send(embed=embed)
+
 class FiveMConnectView(View):
     def __init__(self):
         super().__init__(timeout=None)
         self.add_item(discord.ui.Button(label="התחברות ישירה לעיר 🚀", style=discord.ButtonStyle.link, url="https://cfx.re"))
 
-# משימת הסטטוס המאוחדת – פונה לשרת FiveM של דיסקורד ישירות כל 2 דקות
+# משימת הסטטוס המאוחדת
 @tasks.loop(minutes=2)
 async def update_fivem_status():
     global fivem_msg_id
@@ -428,7 +475,7 @@ async def update_fivem_status():
 
     embed = discord.Embed(title="Chicago City — Status", color=color, timestamp=datetime.datetime.utcnow())
     embed.add_field(name="🎮 FIVEM STATUS", value=f"• סטטוס השרת: `{status_str}`\n• שחקנים בעיר: `{players_str}`\n• צוות בתוך העיר: `{staff_str}`", inline=False)
-    embed.add_field(name="💬 DISCORD STATUS", value=f"• סך הכל תושבים: `{total_dc_members} אזרחים`\n• משתמשים אונליין: `{online_dc_users} מחוברים`\n• אנשי צוות אונליין: `{staff_dc_online} זמינים`", inline=False)
+    embed.add_field(name="💬 DISCORD STATUS", value=f"• סך הכל תתושבים: `{total_dc_members} אזרחים`\n• משתמשים אונליין: `{online_dc_users} מחוברים`\n• אנשי צוות אונליין: `{staff_dc_online} זמינים`", inline=False)
     embed.set_footer(text="Chicago City • ערוץ סטטוס רשמי")
     if guild.icon: embed.set_thumbnail(url=guild.icon.url)
 
@@ -443,11 +490,6 @@ async def update_fivem_status():
             msg = await ch.fetch_message(fivem_msg_id)
             await msg.edit(embed=embed, view=FiveMConnectView())
     except: fivem_msg_id = None
-
-@bot.event
-async def on_ready():
-    print(f"Logged in as {bot.user.name}")
-    if not update_fivem_status.is_running(): update_fivem_status.start()
 
 keep_alive()
 bot.run(os.environ['DISCORD_TOKEN'])
