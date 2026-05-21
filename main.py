@@ -23,7 +23,7 @@ ROLE_WARN_ADMIN = 1483039215393702012
 CHANNEL_STAFF_WARNS_LOG = 1483039219336347810
 CHANNEL_FIVEM_STATUS = 1506965475270332476 
 CHANNEL_TICKET_LOGS = 1483039219654852612
-CFX_ID = "rmadb7p" # מזהה ה-CFX הרשמי של Chicago City לעקיפת חסימות!
+FIVEM_IP = "135.148.36.192:30125" # חזרה ל-IP הישיר שלכם
 
 LOG_CHANNELS = {
     "channel_create": 1483039219654852617, "channel_delete": 1483039219654852616,
@@ -266,7 +266,7 @@ class FiveMConnectView(View):
         super().__init__(timeout=None)
         self.add_item(discord.ui.Button(label="התחברות ישירה לעיר 🚀", style=discord.ButtonStyle.link, url="https://cfx.re"))
 
-# --- משימת הסטטוס העדכנית הפונה לשרתי FiveM הרשמיים כל 2 דקות ---
+# --- משימת הסטטוס הפונה ישירות ל-IP עם כותרות דפדפן לעקיפת חומת האש ---
 @tasks.loop(minutes=2)
 async def update_fivem_status():
     global fivem_msg_id
@@ -282,23 +282,24 @@ async def update_fivem_status():
 
     status_str, players_str, staff_str, color = "🔴 מנותק (Offline)", "0 / 0", "0 מחוברים", discord.Color.red()
     
-    headers = {"User-Agent": "Mozilla/5.0"}
+    # הוספת כותרת דפדפן (Headers) רשמית ומקצועית לעקיפת חומת האש באחסון!
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "application/json"
+    }
     async with aiohttp.ClientSession(headers=headers) as session:
         try:
-            # פנייה ל-API המרכזי והרשמי של FiveM (עוקף חומות אש!)
-            async with session.get(f"https://fivem.net{CFX_ID}", timeout=5) as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    server_data = data.get("Data", {})
+            async with session.get(f"http://{FIVEM_IP}/players.json", timeout=4) as r1, session.get(f"http://{FIVEM_IP}/dynamic.json", timeout=4) as r2:
+                if r1.status == 200 and r2.status == 200:
+                    players_data = await r1.json()
+                    dynamic_data = await r2.json()
                     
                     status_str = "🟢 מקוון (Online)"
                     color = discord.Color.green()
-                    
-                    players_list = server_data.get("players", [])
-                    players_str = f"{len(players_list)} / {server_data.get('sv_maxclients', 64)}"
+                    players_str = f"{len(players_data)} / {dynamic_data.get('maxclients', 64)}"
                     
                     fivem_identifiers = []
-                    for player in players_list:
+                    for player in players_data:
                         for identifier in player.get('identifiers', []):
                             if identifier.startswith('discord:'):
                                 fivem_identifiers.append(int(identifier.replace('discord:', '')))
@@ -306,11 +307,11 @@ async def update_fivem_status():
                     staff_game_count = sum(1 for m in staff_role.members if m.id in fivem_identifiers) if staff_role else 0
                     staff_str = f"{staff_game_count} אנשי צוות בעיר"
         except Exception as e:
-            print(f"FiveM Live API error: {e}")
+            print(f"Direct IP Status Connection error: {e}")
 
     embed = discord.Embed(title="Chicago City — Status", color=color, timestamp=datetime.datetime.utcnow())
     embed.add_field(name="🎮 FIVEM STATUS", value=f"• סטטוס השרת: `{status_str}`\n• שחקנים בעיר: `{players_str}`\n• צוות בתוך העיר: `{staff_str}`", inline=False)
-    embed.add_field(name="💬 DISCORD STATUS", value=f"• סך הכל תתושבים: `{total_dc_members} אזרחים`\n• משתמשים אונליין: `{online_dc_users} מחוברים`\n• אנשי צוות אונליין: `{staff_dc_online} זמינים`", inline=False)
+    embed.add_field(name="💬 DISCORD STATUS", value=f"• סך הכל תושבים: `{total_dc_members} אזרחים`\n• משתמשים אונליין: `{online_dc_users} מחוברים`\n• אנשי צוות אונליין: `{staff_dc_online} זמינים`", inline=False)
     embed.set_footer(text="Chicago City • ערוץ סטטוס רשמי")
     if guild.icon: embed.set_thumbnail(url=guild.icon.url)
 
