@@ -30,10 +30,16 @@ intents.presences = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# איידיז נעולים של CHICAGO CITY
+# איידיז נעולים קבועים — CHICAGO CITY
 ROLE_VERIFIED = 1483039214793789489
 ROLE_STAFF = 1483039215364345930
 CHANNEL_GIVEAWAY = 1483039216366780532
+
+# רול ניהול עליון בלעדי שיכול לתת ווארנים לצוות
+ROLE_WARN_ADMIN = 1483039215393702012
+
+# חדר הלוגים הייעודי של אזהרות הצוות 
+CHANNEL_STAFF_WARNS_LOG = 1483039219336347810
 
 LOG_CHANNELS = {
     "channel_create": 1483039219654852617,
@@ -50,11 +56,10 @@ LOG_CHANNELS = {
     "security": 1483039220284002367
 }
 
-warnings_db = {}
+staff_warns_db = {}
 invites_cache = {}
 
-# הקישור הנקי והקבוע ללוגו היהלומים המטורף החדש שלך!
-IMG_URL = "https://cdn.discordapp.com/attachments/1506408137739997355/1506825707504795829/6ffda0e27f0898b7.png"
+IMG_URL = "https://discordapp.com"
 
 # מערכת אימות (VERIFICATION)
 class VerifyView(View):
@@ -185,8 +190,7 @@ async def setup_tickets(ctx):
     )
     embed.set_image(url=IMG_URL)
     await ctx.send(embed=embed, view=TicketDropdownView())
-
-# הגרלות (GIVEAWAYS)
+# --- מערכת הגרלות (GIVEAWAYS) ---
 class AdvancedGiveawayView(View):
     def __init__(self, prize, winners_count):
         super().__init__(timeout=None)
@@ -254,7 +258,7 @@ async def end_giveaway_logic(channel, prize, winners_count, entrants, message):
 async def giveaway(ctx, duration: int, winners: int, *, prize: str):
     embed = discord.Embed(
         title="🎁 GIVEAWAY SYSTEM — CHICAGO CITY 🎁",
-        description=f"הגרלה חדשה ומטורפת יצאה לדרך בשרת!\n\n🏆 **פרס שווה:** `{prize}`\n👥 **כמות זוכים מוגדרת:** `{winners}`\n⏱️ **זמן לסיום אוטומטי:** `{duration}` דקות\n\nלחצו על הכפתור הירוק למטה כדי להירשם!",
+        description=f"הגרלה חדשה ומטורפת יצאה לדרך בשרת!\n\n🏆 **פרס שווה:** `{prize}`\n👥 **כמות זוכים מוגדרת:** `{winners}`\n⏱️ **זמן לסיום אוטומטי:** `{duration}` דקות\n\nלחצו על הכפתור למטה כדי להירשם!",
         color=discord.Color.from_rgb(241, 196, 15),
         timestamp=datetime.datetime.utcnow()
     )
@@ -270,33 +274,73 @@ async def giveaway(ctx, duration: int, winners: int, *, prize: str):
         gv_view.active = False
         await end_giveaway_logic(channel, prize, winners, gv_view.entrants, msg)
 
-# אזהרות (MODERATION)
+# --- מערכת אזהרות מנהלים מעוצבת סייבר (NEW STAFF WARN SYSTEM) ---
 @bot.command()
-@commands.has_permissions(manage_messages=True)
-async def warn(ctx, member: discord.Member, *, reason: str = "לא צוינה סיבה"):
-    if member.id not in warnings_db:
-        warnings_db[member.id] = []
-    warnings_db[member.id].append(reason)
+async def swarn(ctx, member: discord.Member, *, reason: str = "לא צוינה סיבה"):
+    # וידוא רול הניהול המורשה בלבד
+    admin_role = ctx.guild.get_role(ROLE_WARN_ADMIN)
+    if admin_role not in ctx.author.roles and not ctx.author.guild_permissions.administrator:
+        return await ctx.send("❌ **שגיאת אבטחה: פקודה זו מיועדת לדרג ניהול עליון בלבד!**")
+
+    if member.id not in staff_warns_db:
+        staff_warns_db[member.id] = []
+        
+    current_time = datetime.datetime.now().strftime("%d/%m/%Y | %H:%M")
+    staff_warns_db[member.id].append({"reason": reason, "by": ctx.author.id, "date": current_time})
+    count = len(staff_warns_db[member.id])
     
-    embed = discord.Embed(title="⚠️ קיבלת אזהרה בשרת", description=f"שרת: Chicago City\nסיבה: {reason}", color=discord.Color.red())
-    try: await member.send(embed=embed)
-    except: pass
-    
-    await ctx.send(f"המשתמש {member.mention} הוזהר בהצלחה. (סה''כ אזהרות: {len(warnings_db[member.id])})")
+    # שליחת הודעת לוג מטורפת בעיצוב פצצה לחדר שנתת לי!
+    log_channel = bot.get_channel(CHANNEL_STAFF_WARNS_LOG)
+    if log_channel:
+        embed = discord.Embed(
+            title="⚡ DETECTED: STAFF MISCONDUCT UNCOVERED",
+            description="```⚠️ פרוטוקול אבטחה פנימי הופעל — רישום אזהרה למנהל```",
+            color=discord.Color.from_rgb(231, 76, 60),
+            timestamp=datetime.datetime.utcnow()
+        )
+        embed.set_thumbnail(url=member.display_avatar.url)
+        embed.add_field(name="👤 המנהל שהוזהר", value=member.mention, inline=True)
+        embed.add_field(name="🛡️ האדמין המעניש", value=ctx.author.mention, inline=True)
+        embed.add_field(name="📅 זמן האירוע", value=f"`{current_time}`", inline=False)
+        embed.add_field(name="📝 סיבת האזהרה", value=f"```fix\n{reason}```", inline=False)
+        
+        # מד חזותי קטלני של כמות האזהרות
+        bars = "🟥" * count + "⬛" * (3 - count) if count <= 3 else "🟥" * count
+        embed.add_field(name="📊 מצב אזהרות בתיק", value=f"{bars} ({count}/3 אזהרות)", inline=False)
+        
+        embed.set_image(url=IMG_URL)
+        embed.set_footer(text="Chicago City Intelligence Agency • Internal Affairs")
+        await log_channel.send(embed=embed)
+        
+    await ctx.send(f"✅ **האזהרה המעוצבת נרשמה בהצלחה ונשלחה ללוג הסודי!** (סה''כ אזהרות: `{count}`)")
 
 @bot.command()
-async def warns(ctx, member: discord.Member):
-    count = len(warnings_db.get(member.id, []))
-    await ctx.send(f"למשתמש {member.mention} יש כרגע `{count}` אזהרות בשרת.")
+async def swarns(ctx, member: discord.Member):
+    count = len(staff_warns_db.get(member.id, []))
+    if count == 0:
+        return await ctx.send(f"🟢 **המנהל {member.mention} נקי לחלוטין ללא אזהרות פעילות בתיק!**")
+        
+    embed = discord.Embed(
+        title=f"📋 תיק משמעת חסוי — {member.name}",
+        description=f"להלן פירוט האזהרות הרשמיות של {member.mention} בשרת:",
+        color=discord.Color.orange()
+    )
+    for i, w in enumerate(staff_warns_db[member.id], 1):
+        embed.add_field(name=f"🚨 אזהרה מספר {i} ({w['date']})", value=f"• **הוזהר ע''י:** <@{w['by']}>\n• **סיבה:** {w['reason']}", inline=False)
+    
+    await ctx.send(embed=embed)
 
 @bot.command()
-@commands.has_permissions(manage_messages=True)
-async def unwarn(ctx, member: discord.Member):
-    if member.id in warnings_db and len(warnings_db[member.id]) > 0:
-        warnings_db[member.id].pop()
-        await ctx.send(f"האזהרה האחרונה של {member.mention} הוסרה בהצלחה.")
+async def sunwarn(ctx, member: discord.Member):
+    admin_role = ctx.guild.get_role(ROLE_WARN_ADMIN)
+    if admin_role not in ctx.author.roles and not ctx.author.guild_permissions.administrator:
+        return await ctx.send("❌ **שגיאת אבטחה: אין לך הרשאה לבטל אזהרות לצוות!**")
+        
+    if member.id in staff_warns_db and len(staff_warns_db[member.id]) > 0:
+        removed = staff_warns_db[member.id].pop()
+        await ctx.send(f"✅ **האזהרה האחרונה של {member.mention} בוטלה ונמחקה מהתיק בהצלחה!**")
     else:
-        await ctx.send("למשתמש זה אין אזהרות פעילות.")
+        await ctx.send("למנהל זה אין אזהרות פעילות בתיק.")
 
 # כריזה (ANNOUNCEMENTS)
 @bot.command()
