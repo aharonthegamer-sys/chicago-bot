@@ -22,7 +22,7 @@ CHANNEL_GIVEAWAY = 1483039216366780532
 ROLE_WARN_ADMIN = 1483039215393702012
 CHANNEL_STAFF_WARNS_LOG = 1483039219336347810
 CHANNEL_FIVEM_STATUS = 1506965475270332476 
-CHANNEL_TICKET_LOGS = 1483039219654852612 # החדר החדש של לוגי הטיקטים ששלחת!
+CHANNEL_TICKET_LOGS = 1483039219654852612
 FIVEM_IP = "135.148.36.192:30125"
 
 LOG_CHANNELS = {
@@ -63,35 +63,55 @@ async def setup_verify(ctx):
     if ctx.guild.icon: embed.set_image(url=ctx.guild.icon.url)
     await ctx.send(embed=embed, view=VerifyView())
 
-# מערכת טיקטים עם חלון לוגים ייעודי ומבודד
+# --- מערכת טיקטים מתקדמת עם 4 כפתורי ניהול לצוות ---
 class TicketControls(View):
     def __init__(self): super().__init__(timeout=None)
+    
     @discord.ui.button(label="קח טיפול 🙋‍♂️", style=discord.ButtonStyle.blurple, custom_id="tk_claim")
     async def claim(self, interaction: discord.Interaction, button: Button):
         await interaction.response.defer()
-        if interaction.guild.get_role(ROLE_STAFF) not in interaction.user.roles: return
+        if interaction.guild.get_role(ROLE_STAFF) not in interaction.user.roles and not interaction.user.guild_permissions.administrator: return
         await interaction.channel.send(f"🔒 הפנייה ננעלה בטיפול של {interaction.user.mention}")
         
-        # שולח לוג לערוץ הטיקטים הייעודי
         log_ch = bot.get_channel(CHANNEL_TICKET_LOGS)
-        if log_ch:
-            embed = discord.Embed(title="Chicago City", description=f"🔒 **טיקט בטיפול**\n\n• חדר: {interaction.channel.mention}\n• נציג מטפל: {interaction.user.mention}", color=discord.Color.blue())
-            await log_ch.send(embed=embed)
-            
+        if log_ch: await log_ch.send(embed=discord.Embed(title="Chicago City", description=f"🔒 **טיקט בטיפול**\n\n• חדר: {interaction.channel.mention}\n• נציג מטפל: {interaction.user.mention}", color=discord.Color.blue()))
         button.disabled = True; await interaction.message.edit(view=self)
+
+    @discord.ui.button(label="שנה שם 📝", style=discord.ButtonStyle.grey, custom_id="tk_rename")
+    async def rename(self, interaction: discord.Interaction, button: Button):
+        if interaction.guild.get_role(ROLE_STAFF) not in interaction.user.roles and not interaction.user.guild_permissions.administrator:
+            return await interaction.response.send_message("❌ אין לך הרשאה לבצע פעולה זו!", ephemeral=True)
+        await interaction.response.send_message("⚙️ אנא הקלד את השם החדש לערוץ הטיקט בצ'אט:", ephemeral=True)
+        def check(m): return m.author == interaction.user and m.channel == interaction.channel
+        try:
+            msg = await bot.wait_for('message', check=check, timeout=30)
+            await interaction.channel.edit(name=f"ticket-{msg.content}")
+            await interaction.channel.send(f"✅ שם הערוץ שונה בהצלחה ל: `ticket-{msg.content}`")
+        except asyncio.TimeoutError: await interaction.channel.send("❌ הזמן הקצוב לעריכת השם פג.")
+
+    @discord.ui.button(label="הוסף משתמש ➕", style=discord.ButtonStyle.green, custom_id="tk_add_member")
+    async def add_member(self, interaction: discord.Interaction, button: Button):
+        if interaction.guild.get_role(ROLE_STAFF) not in interaction.user.roles and not interaction.user.guild_permissions.administrator:
+            return await interaction.response.send_message("❌ אין לך הרשאה לבצע פעולה זו!", ephemeral=True)
+        await interaction.response.send_message("👤 אנא תייג את המשתמש שברצונך להוסיף לטיקט זה בצ'אט:", ephemeral=True)
+        def check(m): return m.author == interaction.user and m.channel == interaction.channel
+        try:
+            msg = await bot.wait_for('message', check=check, timeout=30)
+            if msg.mentions:
+                target = msg.mentions[0]
+                await interaction.channel.set_permissions(target, read_messages=True, send_messages=True)
+                await interaction.channel.send(f"✅ המשתמש {target.mention} הוסף בהצלחה לכרטיס התמיכה הנוכחי!")
+            else: await interaction.channel.send("❌ לא תוייג משתמש תקין. הפעולה בוטלה.")
+        except asyncio.TimeoutError: await interaction.channel.send("❌ הזמן הקצוב להוספת המשתמש פג.")
 
     @discord.ui.button(label="סגור פנייה ❌", style=discord.ButtonStyle.red, custom_id="tk_close")
     async def close(self, interaction: discord.Interaction, button: Button):
         await interaction.response.defer()
-        if interaction.guild.get_role(ROLE_STAFF) not in interaction.user.roles: return
+        if interaction.guild.get_role(ROLE_STAFF) not in interaction.user.roles and not interaction.user.guild_permissions.administrator: return
         await interaction.channel.send("🚧 חדר הטיקט יימחק בעוד 5 שניות...")
         
-        # שולח לוג סגירה לערוץ הטיקטים הייעודי
         log_ch = bot.get_channel(CHANNEL_TICKET_LOGS)
-        if log_ch:
-            embed = discord.Embed(title="Chicago City", description=f"❌ **טיקט נסגר**\n\n• שם חדר: `{interaction.channel.name}`\n• נסגר על ידי: {interaction.user.mention}", color=discord.Color.red())
-            await log_ch.send(embed=embed)
-            
+        if log_ch: await log_ch.send(embed=discord.Embed(title="Chicago City", description=f"❌ **טיקט נסגר**\n\n• שם חדר: `{interaction.channel.name}`\n• נסגר על ידי: {interaction.user.mention}", color=discord.Color.red()))
         await asyncio.sleep(5); await interaction.channel.delete()
 
 class TicketDropdown(Select):
@@ -112,16 +132,15 @@ class TicketDropdown(Select):
         await ticket_channel.set_permissions(interaction.guild.get_role(ROLE_STAFF), read_messages=True, send_messages=True)
         await interaction.followup.send(f"✅ הטיקט נוצר! כנס לחדר: {ticket_channel.mention}", ephemeral=True)
         
-        # שולח לוג פתיחה לערוץ הטיקטים הייעודי
         log_ch = bot.get_channel(CHANNEL_TICKET_LOGS)
-        if log_ch:
-            embed = discord.Embed(title="Chicago City", description=f"➕ **טיקט חדש נפתח**\n\n• פותח הפנייה: {interaction.user.mention}\n• נושא: `{self.values}`\n• חדר: {ticket_channel.mention}", color=discord.Color.green())
-            await log_ch.send(embed=embed)
+        if log_ch: await log_ch.send(embed=discord.Embed(title="Chicago City", description=f"➕ **טיקט חדש נפתח**\n\n• פותח הפנייה: {interaction.user.mention}\n• נושא: `{self.values}`\n• חדר: {ticket_channel.mention}", color=discord.Color.green()))
             
         embed = discord.Embed(title="Chicago City", description=f"שלום {interaction.user.mention}, פנייתך בנושא `{self.values}` התקבלה!\nצוות השרת יגיע בהקדם.", color=discord.Color.red())
         embed.set_footer(text="Chicago City")
         if interaction.guild.icon: embed.set_image(url=interaction.guild.icon.url)
         await ticket_channel.send(embed=embed, view=TicketControls())
+        
+        # תיוג של רול הצוות ומחיקה מיידית (Silent Ping) כדי להקפיץ להם התראה!
         p = await ticket_channel.send(f"<@&{ROLE_STAFF}>"); await p.delete()
 
 @bot.command()
