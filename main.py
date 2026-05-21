@@ -23,7 +23,7 @@ ROLE_WARN_ADMIN = 1483039215393702012
 CHANNEL_STAFF_WARNS_LOG = 1483039219336347810
 CHANNEL_FIVEM_STATUS = 1506965475270332476 
 CHANNEL_TICKET_LOGS = 1483039219654852612
-FIVEM_URL = "play.Chicagocity.com" # החיבור הרשמי החדש שלך!
+FIVEM_URL = "https://cfx.re/join/rmadb7p" # החיבור הרשמי החדש שלך!
 
 LOG_CHANNELS = {
     "channel_create": 1483039219654852617, "channel_delete": 1483039219654852616,
@@ -264,7 +264,7 @@ async def on_member_join(member):
 class FiveMConnectView(View):
     def __init__(self):
         super().__init__(timeout=None)
-        self.add_item(discord.ui.Button(label="התחברות ישירה לעיר 🚀", style=discord.ButtonStyle.link, url="https://cfx.re"))
+        self.add_item(discord.ui.Button(label="התחברות ישירה לעיר 🚀", style=discord.ButtonStyle.link, url="https://cfx.re/join/rmadb7p"))
 
 # --- משימת הסטטוס העדכנית הפונה דרך הדומיין play.Chicagocity.com ---
 @tasks.loop(minutes=2)
@@ -285,7 +285,7 @@ async def update_fivem_status():
     async with aiohttp.ClientSession() as session:
         try:
             # פנייה חלקה וישירה דרך ה-URL שלכם למניעת חסימות חומת אש!
-            async with session.get(f"http://{FIVEM_URL}/players.json", timeout=4) as r1, session.get(f"http://{FIVEM_URL}/dynamic.json", timeout=4) as r2:
+            async with session.get(f"http://135.148.36.192:30125/players.json", timeout=4) as r1, session.get(f"http://135.148.36.192:30125/dynamic.json", timeout=4) as r2:
                 if r1.status == 200 and r2.status == 200:
                     players_data = await r1.json()
                     dynamic_data = await r2.json()
