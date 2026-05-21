@@ -63,7 +63,7 @@ async def setup_verify(ctx):
     if ctx.guild.icon: embed.set_image(url=ctx.guild.icon.url)
     await ctx.send(embed=embed, view=VerifyView())
 
-# מערכת טיקטים
+# מערכת טיקטים (התיקון בשורה 110 בוצע!)
 class TicketControls(View):
     def __init__(self): super().__init__(timeout=None)
     
@@ -107,7 +107,7 @@ class TicketControls(View):
     @discord.ui.button(label="סגור פנייה ❌", style=discord.ButtonStyle.red, custom_id="tk_close")
     async def close(self, interaction: discord.Interaction, button: Button):
         await interaction.response.defer()
-        if interaction.guild.get_role(ROLE_STAFF) not in interaction.user.roles bottlenecks and not interaction.user.guild_permissions.administrator: return
+        if interaction.guild.get_role(ROLE_STAFF) not in interaction.user.roles and not interaction.user.guild_permissions.administrator: return
         await interaction.channel.send("🚧 חדר הטיקט יימחק בעוד 5 שניות...")
         
         log_ch = bot.get_channel(CHANNEL_TICKET_LOGS)
@@ -266,7 +266,7 @@ class FiveMConnectView(View):
         super().__init__(timeout=None)
         self.add_item(discord.ui.Button(label="התחברות ישירה לעיר 🚀", style=discord.ButtonStyle.link, url="https://cfx.re"))
 
-# משימת הסטטוס המאוחדת עם הדפסת שגיאות ללוגים
+# משימת הסטטוס המאוחדת עם הדפסת שגיאות רשת ללוגים
 @tasks.loop(minutes=2)
 async def update_fivem_status():
     global fivem_msg_id
@@ -300,15 +300,13 @@ async def update_fivem_status():
                     staff_game_count = sum(1 for m in staff_role.members if m.id in fivem_identifiers) if staff_role else 0
                     staff_str = f"{staff_game_count} אנשי צוות בעיר"
                 else:
-                    # מדפיס ללוגים של רנדר אם השרת החזיר קוד חסימה (כמו 403 או 404)
-                    print(f"[FiveM API Tracker] Server returned status code: {resp.status}")
+                    print(f"[FiveM API] Status error code: {resp.status}")
         except Exception as error_msg:
-            # מדפיס ללוגים של רנדר את שגיאת החיבור המדויקת של הרשת!
-            print(f"[FiveM API Tracker] Network connection failure error: {error_msg}")
+            print(f"[FiveM API] Connection crash error: {error_msg}")
 
     embed = discord.Embed(title="Chicago City — Status", color=color, timestamp=datetime.datetime.utcnow())
     embed.add_field(name="🎮 FIVEM STATUS", value=f"• סטטוס השרת: `{status_str}`\n• שחקנים בעיר: `{players_str}`\n• צוות בתוך העיר: `{staff_str}`", inline=False)
-    embed.add_field(name="💬 DISCORD STATUS", value=f"• סך הכל תתושבים: `{total_dc_members} אזרחים`\n• משתמשים אונליין: `{online_dc_users} מחוברים`\n• אנשי צוות אונליין: `{staff_dc_online} זמינים`", inline=False)
+    embed.add_field(name="💬 DISCORD STATUS", value=f"• סך הכל תושבים: `{total_dc_members} אזרחים`\n• משתמשים אונליין: `{online_dc_users} מחוברים`\n• אנשי צוות אונליין: `{staff_dc_online} זמינים`", inline=False)
     embed.set_footer(text="Chicago City • ערוץ סטטוס רשמי")
     if guild.icon: embed.set_thumbnail(url=guild.icon.url)
 
@@ -322,7 +320,8 @@ async def update_fivem_status():
         else:
             msg = await ch.fetch_message(fivem_msg_id)
             await msg.edit(embed=embed, view=FiveMConnectView())
-    except: fivem_msg_id = None
+    except:
+        fivem_msg_id = None
 
 @bot.event
 async def on_ready():
