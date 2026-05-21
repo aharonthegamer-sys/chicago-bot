@@ -53,8 +53,8 @@ LOG_CHANNELS = {
 warnings_db = {}
 invites_cache = {}
 
-# קישור ללוגו המעוצב של השרת
-IMG_URL = "https://discordapp.com"
+# הקישור הנקי והקבוע ללוגו היהלומים המטורף החדש שלך!
+IMG_URL = "https://cdn.discordapp.com/attachments/1506408137739997355/1506825707504795829/6ffda0e27f0898b7.png"
 
 # מערכת אימות (VERIFICATION)
 class VerifyView(View):
@@ -117,7 +117,7 @@ class TicketControls(View):
     async def rename(self, interaction: discord.Interaction, button: Button):
         staff_role = interaction.guild.get_role(ROLE_STAFF)
         if staff_role not in interaction.user.roles and not interaction.user.guild_permissions.administrator:
-            return await interaction.response.send_message("❌ פעולה חסומה. גישה לנציגי צוות בלבד.", ephemeral=True)
+            return await interaction.followup.send("❌ פעולה חסומה. גישה לנציגי צוות בלבד.", ephemeral=True)
         
         await interaction.response.send_message("⚙️ אנא הקלד את השם החדש לערוץ הטיקט בצ'אט:", ephemeral=True)
         def check(m): return m.author == interaction.user and m.channel == interaction.channel
