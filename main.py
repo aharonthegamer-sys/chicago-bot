@@ -23,8 +23,10 @@ ROLE_WARN_ADMIN = 1483039215393702012
 CHANNEL_STAFF_WARNS_LOG = 1483039219336347810
 CHANNEL_FIVEM_STATUS = 1506965475270332476 
 CHANNEL_TICKET_LOGS = 1483039219654852612
-FIVEM_HOST = "135.148.36.192"
-FIVEM_PORT = 30125
+
+# הגדרת שרת המשחק המדויקת שלכם!
+FIVEM_IP_ONLY = "135.148.36.192"
+FIVEM_PORT_ONLY = 30125
 CFX_ID = "rmadb7p"
 
 LOG_CHANNELS = {
@@ -74,7 +76,6 @@ class TicketControls(View):
         await interaction.response.defer()
         if interaction.guild.get_role(ROLE_STAFF) not in interaction.user.roles and not interaction.user.guild_permissions.administrator: return
         await interaction.channel.send(f"🔒 הפנייה ננעלה בטיפול של {interaction.user.mention}")
-        
         log_ch = bot.get_channel(CHANNEL_TICKET_LOGS)
         if log_ch: await log_ch.send(embed=discord.Embed(title="Chicago City", description=f"🔒 **טיקט בטיפול**\n\n• חדר: {interaction.channel.mention}\n• נציג מטפל: {interaction.user.mention}", color=discord.Color.blue()))
         button.disabled = True; await interaction.message.edit(view=self)
@@ -100,7 +101,7 @@ class TicketControls(View):
         try:
             msg = await bot.wait_for('message', check=check, timeout=30)
             if msg.mentions:
-                target = msg.mentions
+                target = msg.mentions[0]
                 await interaction.channel.set_permissions(target, read_messages=True, send_messages=True)
                 await interaction.channel.send(f"✅ המשתמש {target.mention} הוסף בהצלחה לכרטיס התמיכה הנוכחי!")
             else: await interaction.channel.send("❌ לא תוייג משתמש תקין. הפעולה בוטלה.")
@@ -111,7 +112,6 @@ class TicketControls(View):
         await interaction.response.defer()
         if interaction.guild.get_role(ROLE_STAFF) not in interaction.user.roles and not interaction.user.guild_permissions.administrator: return
         await interaction.channel.send("🚧 חדר הטיקט יימחק בעוד 5 שניות...")
-        
         log_ch = bot.get_channel(CHANNEL_TICKET_LOGS)
         if log_ch: await log_ch.send(embed=discord.Embed(title="Chicago City", description=f"❌ **טיקט נסגר**\n\n• שם חדר: `{interaction.channel.name}`\n• נסגר על ידי: {interaction.user.mention}", color=discord.Color.red()))
         await asyncio.sleep(5); await interaction.channel.delete()
@@ -268,7 +268,7 @@ class FiveMConnectView(View):
         super().__init__(timeout=None)
         self.add_item(discord.ui.Button(label="התחברות ישירה לעיר 🚀", style=discord.ButtonStyle.link, url="https://cfx.re"))
 
-# --- מנגנון בדיקה משולב ומאובטח (מקומי ועוקף חסימות ב-100%) ---
+# --- מנגנון בדיקת סטטוס פנימי ישיר (SOCKET PORT PING) ---
 @tasks.loop(minutes=2)
 async def update_fivem_status():
     global fivem_msg_id
@@ -283,17 +283,17 @@ async def update_fivem_status():
 
     status_str, players_str, staff_str, color = "🔴 מנותק (Offline)", "0 / 0", "0 מחוברים", discord.Color.red()
     
-    # 1. בדיקת זמינות ישירה באמצעות Socket Game Ping (חסינת באגים וחסימות!)
+    # ביצוע פניית רשת לוקאלית ישירה (Socket Ping) לבדיקה אם הפורט פתוח
     loop = asyncio.get_event_loop()
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.settimeout(3)
     try:
-        await loop.run_in_executor(None, s.connect, (FIVEM_IP.split(':')[0], int(FIVEM_IP.split(':')[1])))
+        await loop.run_in_executor(None, s.connect, (FIVEM_IP_ONLY, FIVEM_PORT_ONLY))
         status_str = "🟢 מקוון (Online)"
         color = discord.Color.green()
         s.close()
         
-        # 2. אם המשחק פתוח, הבוט מושך את הנתונים המדויקים
+        # משיכת שחקנים רשמית עוקפת חסימות דרך רשימת השרתים הציבורית
         headers = {"User-Agent": "Mozilla/5.0"}
         async with aiohttp.ClientSession(headers=headers) as session:
             async with session.get(f"https://fivem.net{CFX_ID}", timeout=4) as resp:
@@ -316,7 +316,7 @@ async def update_fivem_status():
 
     embed = discord.Embed(title="Chicago City — Status", color=color, timestamp=datetime.datetime.utcnow())
     embed.add_field(name="🎮 FIVEM STATUS", value=f"• סטטוס השרת: `{status_str}`\n• שחקנים בעיר: `{players_str}`\n• צוות בתוך העיר: `{staff_str}`", inline=False)
-    embed.add_field(name="💬 DISCORD STATUS", value=f"• סך הכל תושבים: `{total_dc_members} אזרחים`\n• משתמשים אונליין: `{online_dc_users} מחוברים`\n• אנשי צוות אונליין: `{staff_dc_online} זמינים`", inline=False)
+    embed.add_field(name="💬 DISCORD STATUS", value=f"• סך הכל תתושבים: `{total_dc_members} אזרחים`\n• משתמשים אונליין: `{online_dc_users} מחוברים`\n• אנשי צוות אונליין: `{staff_dc_online} זמינים`", inline=False)
     embed.set_footer(text="Chicago City • ערוץ סטטוס רשמי")
     if guild.icon: embed.set_thumbnail(url=guild.icon.url)
 
@@ -330,7 +330,8 @@ async def update_fivem_status():
         else:
             msg = await ch.fetch_message(fivem_msg_id)
             await msg.edit(embed=embed, view=FiveMConnectView())
-    except: fivem_msg_id = None
+    except:
+        fivem_msg_id = None
 
 @bot.event
 async def on_ready():
