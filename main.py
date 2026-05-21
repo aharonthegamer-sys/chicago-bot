@@ -1,6 +1,6 @@
 import discord
 from discord.ext import commands, tasks
-from discord.ui import Button, View, Select, Modal, TextInput
+from discord.ui import Button, View, Select, Modal, TextInput, UserSelect
 import asyncio, datetime, os, random, aiohttp
 from flask import Flask
 from threading import Thread
@@ -20,8 +20,8 @@ ROLE_VERIFIED = 1483039214793789489
 ROLE_STAFF = 1483039215364345930
 ROLE_WARN_ADMIN = 1483039215393702012 # רול מנהל עליון מורשה לווארנים
 
-CHANNEL_GIVEAWAY_PANEL = 1507022943413342328 # חדר פאנל הגרלות לצוות
-CHANNEL_GIVEAWAY_PUBLIC = 1483039216366780532 # חדר הגרלות ציבורי לשחקנים
+CHANNEL_GIVEAWAY_PANEL = 1507022943413342328 
+CHANNEL_GIVEAWAY_PUBLIC = 1483039216366780532 
 
 CHANNEL_WARN_PANEL = 1507023136095207515 # חדר פאנל אזהרות למנהלים
 CHANNEL_STAFF_WARNS_LOG = 1483039219336347810 # חדר לוג אזהרות צוות
@@ -134,8 +134,8 @@ class TicketDropdown(Select):
         await ticket_channel.set_permissions(interaction.guild.get_role(ROLE_STAFF), read_messages=True, send_messages=True)
         await interaction.followup.send(f"✅ הטיקט נוצר! כנס לחדר: {ticket_channel.mention}", ephemeral=True)
         log_ch = bot.get_channel(CHANNEL_TICKET_LOGS)
-        if log_ch: await log_ch.send(embed=discord.Embed(title="Chicago City", description=f"➕ **טיקט חדש נפתח**\n\n• פותח הפנייה: {interaction.user.mention}\n• נושא: `{self.values[0]}`\n• חדר: {ticket_channel.mention}", color=discord.Color.green()))
-        embed = discord.Embed(title="Chicago City", description=f"שלום {interaction.user.mention}, פנייתך בנושא `{self.values[0]}` התקבלה!\nצוות השרת יגיע בהקדם.", color=discord.Color.red())
+        if log_ch: await log_ch.send(embed=discord.Embed(title="Chicago City", description=f"➕ **טיקט חדש נפתח**\n\n• פותח הפנייה: {interaction.user.mention}\n• נושא: `{self.values}`\n• חדר: {ticket_channel.mention}", color=discord.Color.green()))
+        embed = discord.Embed(title="Chicago City", description=f"שלום {interaction.user.mention}, פנייתך בנושא `{self.values}` התקבלה!\nצוות השרת יגיע בהקדם.", color=discord.Color.red())
         embed.set_footer(text="Chicago City")
         if interaction.guild.icon: embed.set_image(url=interaction.guild.icon.url)
         await ticket_channel.send(embed=embed, view=TicketControls())
@@ -168,8 +168,7 @@ class GiveawayModal(Modal):
             return await interaction.followup.send("❌ שגיאה: נא להזין מספרים תקינים בשדות הזמן והזוכים!", ephemeral=True)
 
         public_ch = bot.get_channel(CHANNEL_GIVEAWAY_PUBLIC)
-        if not public_ch:
-            return await interaction.followup.send("❌ שגיאה: ערוץ ההגרלות הציבורי לא נמצא.", ephemeral=True)
+        if not public_ch: return await interaction.followup.send("❌ שגיאה: ערוץ ההגרלות הציבורי לא נמצא.", ephemeral=True)
 
         embed = discord.Embed(
             title="Chicago City — Giveaway",
@@ -233,36 +232,27 @@ async def setup_giveaway_panel(ctx):
     embed.set_footer(text="Chicago City Staff Only")
     await ctx.send(embed=embed, view=GiveawayPanelView())
 
-# --- מערכת אזהרות לצוות מבוססת פאנל וטפסים (WARN MODAL SYSTEM) ---
-class WarnModal(Modal):
-    def __init__(self):
-        super().__init__(title="רישום אזהרה למנהל — Chicago City")
-        self.user_id = TextInput(label="איידי (ID) של איש הצוות", placeholder="הדבק כאן את האיידי של המנהל", required=True)
-        self.reason = TextInput(label="סיבת האזהרה", placeholder="לדוגמה: חוסר כבוד / אביוז", required=True)
-        self.add_item(self.user_id)
+# --- פאנל אזהרות משודרג מבוסס בחירת תיוג @ ישירה (WARN PANEL USER SELECT) ---
+class StaffSelectReasonModal(Modal):
+    def __init__(self, target_member):
+        super().__init__(title="סיבת האזהרה — Chicago City")
+        self.target = target_member
+        self.reason = TextInput(label="אנא הקלד את סיבת האזהרה", placeholder="לדוגמה: חוסר כבוד / אביוז דרגות", required=True)
         self.add_item(self.reason)
 
     async def on_submit(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
-        try:
-            target_id = int(self.user_id.value)
-            member = interaction.guild.get_member(target_id)
-        except ValueError:
-            return await interaction.followup.send("❌ שגיאה: נא להזין איידי תקין (מספר בלבד)!", ephemeral=True)
-
-        if not member:
-            return await interaction.followup.send("❌ שגיאה: משתמש זה לא נמצא בשרת!", ephemeral=True)
-
-        if target_id not in staff_warns_db: staff_warns_db[target_id] = []
+        tid = self.target.id
+        if tid not in staff_warns_db: staff_warns_db[tid] = []
         t = datetime.datetime.now().strftime("%d/%m/%Y | %H:%M")
-        staff_warns_db[target_id].append({"reason": self.reason.value, "by": interaction.user.id, "date": t})
-        count = len(staff_warns_db[target_id])
+        staff_warns_db[tid].append({"reason": self.reason.value, "by": interaction.user.id, "date": t})
+        count = len(staff_warns_db[tid])
 
         log_ch = bot.get_channel(CHANNEL_STAFF_WARNS_LOG)
         if log_ch:
             embed = discord.Embed(title="Chicago City", description="**רישום אזהרה לחבר צוות**", color=discord.Color.red())
-            embed.set_thumbnail(url=member.display_avatar.url)
-            embed.add_field(name="👤 המנהל שהוזהר", value=member.mention, inline=True)
+            embed.set_thumbnail(url=self.target.display_avatar.url)
+            embed.add_field(name="👤 המנהל שהוזהר", value=self.target.mention, inline=True)
             embed.add_field(name="🛡️ האדמין המעניש", value=interaction.user.mention, inline=True)
             embed.add_field(name="📅 זמן האירוע", value=f"`{t}`", inline=False)
             embed.add_field(name="📝 סיבת האזהרה", value=f"```fix\n{self.reason.value}```", inline=False)
@@ -271,40 +261,61 @@ class WarnModal(Modal):
             embed.set_footer(text="Chicago City")
             if interaction.guild.icon: embed.set_image(url=interaction.guild.icon.url)
             await log_ch.send(embed=embed)
+        await interaction.followup.send(f"✅ האזהרה נרשמה בהצלחה ל-{self.target.mention}!", ephemeral=True)
 
-        await interaction.followup.send(f"✅ האזהרה נרשמה בהצלחה ל-{member.name} ורישום נשלח לערוץ הלוגים!", ephemeral=True)
+class WarnUserSelect(UserSelect):
+    def __init__(self, action_type):
+        super().__init__(placeholder="בחר חבר צוות מהרשימה... 👤", min_values=1, max_values=1)
+        self.action_type = action_type
+
+    async def callback(self, interaction: discord.Interaction):
+        target = self.values[0]
+        if self.action_type == "add":
+            await interaction.response.send_modal(StaffSelectReasonModal(target))
+        elif self.action_type == "view":
+            c = len(staff_warns_db.get(target.id, []))
+            if c == 0: return await interaction.response.send_message(f"🟢 {target.mention} נקי לחלוטין וללא אזהרות בתיק.", ephemeral=True)
+            embed = discord.Embed(title=f"Chicago City — תיק אזהרות ל-{target.name}", color=discord.Color.orange())
+            for i, w in enumerate(staff_warns_db[target.id], 1):
+                embed.add_field(name=f"🚨 אזהרה {i} ({w['date']})", value=f"• ע''י: <@{w['by']}>\n• סיבה: {w['reason']}", inline=False)
+            embed.set_footer(text="Chicago City")
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+        elif self.action_type == "remove":
+            if target.id in staff_warns_db and len(staff_warns_db[target.id]) > 0:
+                staff_warns_db[target.id].pop()
+                await interaction.response.send_message(f"✅ האזהרה האחרונה של {target.mention} נמחקה מהתיק בהצלחה!", ephemeral=True)
+            else: await interaction.response.send_message(f"❌ ל-{target.mention} אין אזהרות פעילות למחיקה.", ephemeral=True)
 
 class WarnPanelView(View):
     def __init__(self): super().__init__(timeout=None)
-    @discord.ui.button(label="רשום אזהרה למנהל ⚠️", style=discord.ButtonStyle.red, custom_id="warn_panel_btn")
-    async def give_warn(self, interaction: discord.Interaction, button: Button):
+    
+    @discord.ui.button(label="רשום אזהרה למנהל ⚠️", style=discord.ButtonStyle.red, custom_id="wp_add")
+    async def add_warn_btn(self, interaction: discord.Interaction, button: Button):
         if interaction.guild.get_role(ROLE_WARN_ADMIN) not in interaction.user.roles and not interaction.user.guild_permissions.administrator:
-            return await interaction.response.send_message("❌ אבטחה: פעולה זו חסומה! מיועד לדרג ניהול עליון בלבד.", ephemeral=True)
-        await interaction.response.send_modal(WarnModal())
+            return await interaction.response.send_message("❌ אבטחה: מיועד לדרג ניהול עליון בלבד!", ephemeral=True)
+        view = View().add_item(WarnUserSelect("add"))
+        await interaction.response.send_message("⚙️ בחר את חבר הצוות שברצונך להזהיר:", view=view, ephemeral=True)
+
+    @discord.ui.button(label="כמות ווארנים בתיק 📊", style=discord.ButtonStyle.grey, custom_id="wp_view")
+    async def view_warn_btn(self, interaction: discord.Interaction, button: Button):
+        if interaction.guild.get_role(ROLE_WARN_ADMIN) not in interaction.user.roles and not interaction.user.guild_permissions.administrator:
+            return await interaction.response.send_message("❌ אבטחה: מיועד לדרג ניהול עליון בלבד!", ephemeral=True)
+        view = View().add_item(WarnUserSelect("view"))
+        await interaction.response.send_message("⚙️ בחר חבר צוות כדי לצפות בתיק המשמעת שלו:", view=view, ephemeral=True)
+
+    @discord.ui.button(label="מחק אזהרה (Unwarn) 🔓", style=discord.ButtonStyle.green, custom_id="wp_remove")
+    async def remove_warn_btn(self, interaction: discord.Interaction, button: Button):
+        if interaction.guild.get_role(ROLE_WARN_ADMIN) not in interaction.user.roles and not interaction.user.guild_permissions.administrator:
+            return await interaction.response.send_message("❌ אבטחה: מיועד לדרג ניהול עליון בלבד!", ephemeral=True)
+        view = View().add_item(WarnUserSelect("remove"))
+        await interaction.response.send_message("⚙️ בחר חבר צוות כדי למחוק לו את האזהרה האחרונה:", view=view, ephemeral=True)
 
 @bot.command()
 @commands.has_permissions(administrator=True)
 async def setup_warn_panel(ctx):
-    embed = discord.Embed(title="Chicago City — Warn Control", description="פאנל אבטחה חסוי לניהול ורישום משמעת בצוות.\n\n**רק דרג ניהול עליון מורשה ללחוץ על הכפתור האדום למטה ולרשום אזהרה!**", color=discord.Color.red())
+    embed = discord.Embed(title="Chicago City — Warn Control", description="פאנל אבטחה חסוי לניהול, בדיקה ורישום משמעת בצוות.\n\n**רק דרג ניהול עליון מורשה ללחוץ על הכפתורים ולבצע שינויים!**", color=discord.Color.red())
     embed.set_footer(text="Chicago City Management Only")
     await ctx.send(embed=embed, view=WarnPanelView())
-
-@bot.command()
-async def warns(ctx, member: discord.Member):
-    c = len(staff_warns_db.get(member.id, []))
-    if c == 0: return await ctx.send(f"🟢 {member.mention} נקי ללא אזהרות.")
-    embed = discord.Embed(title=f"Chicago City — תיק אזהרות ל-{member.name}", color=discord.Color.orange())
-    for i, w in enumerate(staff_warns_db[member.id], 1):
-        embed.add_field(name=f"🚨 אזהרה {i} ({w['date']})", value=f"• ע''י: <@{w['by']}>\n• סיבה: {w['reason']}", inline=False)
-    embed.set_footer(text="Chicago City")
-    await ctx.send(embed=embed)
-
-@bot.command()
-async def unwarn(ctx, member: discord.Member):
-    if ctx.guild.get_role(ROLE_WARN_ADMIN) not in ctx.author.roles and not ctx.author.guild_permissions.administrator: return
-    if member.id in staff_warns_db and len(staff_warns_db[member.id]) > 0:
-        staff_warns_db[member.id].pop(); await ctx.send(f"✅ האזהרה האחרונה של {member.mention} נמחקה.")
-    else: await ctx.send("אין אזהרות בתיק.")
 
 # מערכת הצעות מטורפת (SUGGESTIONS SYSTEM)
 CHANNEL_SUGG_PANEL = 1507020507776811068
@@ -345,7 +356,7 @@ async def setup_suggestions(ctx):
     if ctx.guild.icon: embed.set_image(url=ctx.guild.icon.url)
     await ctx.send(embed=embed, view=SuggestionPanelView())
 
-# פקודת say
+# פקודת say לצוות
 @bot.command()
 @commands.has_permissions(administrator=True)
 async def say(ctx, channel: discord.TextChannel, em: str, *, content: str):
@@ -380,7 +391,7 @@ class FiveMConnectView(View):
         super().__init__(timeout=None)
         self.add_item(discord.ui.Button(label="התחברות ישירה לעיר 🚀", style=discord.ButtonStyle.link, url="https://cfx.re"))
 
-# משימת הסטטוס המאוחדת – פונה לשרת FiveM של דיסקורד ישירות
+# משימת הסטטוס המאוחדת – פונה לשרת FiveM של דיסקורד ישירות כל 2 דקות
 @tasks.loop(minutes=2)
 async def update_fivem_status():
     global fivem_msg_id
