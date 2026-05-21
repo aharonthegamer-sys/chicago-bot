@@ -29,7 +29,7 @@ CHANNEL_FIVEM_STATUS = 1506965475270332476
 CHANNEL_TICKET_LOGS = 1483039219654852612
 CHANNEL_INVITE_LOGS = 1506417177719210194 
 
-BOT_SECURITY_ID = 651095740390834176 # האיידי של בוט הסקיוריטי שלכם!
+BOT_SECURITY_ID = 651095740390834176 
 CFX_ID = "rmadb7p"
 
 LOG_CHANNELS = {
@@ -103,7 +103,7 @@ class TicketControls(View):
         try:
             msg = await bot.wait_for('message', check=check, timeout=30)
             if msg.mentions:
-                target = msg.mentions
+                target = msg.mentions[0]
                 await interaction.channel.set_permissions(target, read_messages=True, send_messages=True)
                 await interaction.channel.send(f"🎉 **המערכת הכניסה בהצלחה את** {target.mention} **לתוך חדר התמיכה!** ✅")
             else: await interaction.channel.send("❌ שגיאה: לא תייגת משתמש תקין.")
@@ -301,7 +301,7 @@ class WarnPanelView(View):
     @discord.ui.button(label="📊 כמות ווארנים בתיק", style=discord.ButtonStyle.grey, custom_id="wp_view")
     async def view_warn_btn(self, interaction: discord.Interaction, button: Button):
         if interaction.guild.get_role(ROLE_WARN_ADMIN) not in interaction.user.roles and not interaction.user.guild_permissions.administrator:
-            return await interaction.response.send_message("❌ אבטחה: מיועד לדרג ניהול עליון בלבד!", ephemeral=True)
+            return await interaction.response.send_message("❌ אבטחה: מיוedited למפקח ניהול עליון בלבד!", ephemeral=True)
         view = View().add_item(WarnUserSelect("view"))
         await interaction.response.send_message("⚙️ **בחרו חבר צוות מהרשימה למטה כדי לבדוק את כמות האזהרות שלו:**", view=view, ephemeral=True)
 
@@ -438,7 +438,7 @@ class FiveMConnectView(View):
         super().__init__(timeout=None)
         self.add_item(discord.ui.Button(label="🚀 התחברות ישירה ומהירה לעיר!", style=discord.ButtonStyle.link, url="https://cfx.re"))
 
-# --- משימת הסטטוס המאוחדת והצבעונית העוקבת אחרי בוט ה-SECURITY ---
+# משימת הסטטוס המאוחדת והצבעונית כל 2 דקות - כולל עדכון סטטוס הבוט בצד!
 @tasks.loop(minutes=2)
 async def update_fivem_status():
     global fivem_msg_id
@@ -453,31 +453,33 @@ async def update_fivem_status():
 
     status_str, players_str, staff_str, color = "🔴 מנותק (Offline)", "0 / 0", "0 מחוברים", discord.Color.red()
     
-    # משיכת נתוני הסטטוס המשחקיים של בוט ה-Security ישירות מהדיסקורד!
+    # 1. סנכרון רשת מהיר מול בוט ה-Security הרשמי
     security_bot = guild.get_member(BOT_SECURITY_ID)
     if security_bot:
-        # בדיקה אם לבוט יש סטטוס פעיל (Custom Activity / Presence)
-        activities = security_bot.activities
-        for act in activities:
-            if act.type == discord.ActivityType.playing or act.type == discord.ActivityType.custom:
-                # השרת דולק בגלל שבוט האבטחה משדר נתונים
+        for act in security_bot.activities:
+            if act.type in [discord.ActivityType.playing, discord.ActivityType.custom]:
                 status_str = "🟢 מקוון (Online)"
                 color = discord.Color.green()
                 break
-                
-    # שאיבת כמויות השחקנים בצורה מאובטחת מרשימת השרתים הציבורית
+
+    # 2. משיכת נתונים חיה לחישוב ה-Watching כמות שחקנים ברשימת המשתמשים!
     headers = {"User-Agent": "Mozilla/5.0"}
     async with aiohttp.ClientSession(headers=headers) as session:
         try:
-            async with session.get(f"https://fivem.net{CFX_ID}", timeout=4) as resp:
+            async with session.get(f"https://fivem.net{CFX_ID}", timeout=5) as resp:
                 if resp.status == 200:
                     data = await resp.json()
                     server_data = data.get("Data", {})
-                    # אם ה-API זמין, הבוט יקבע ירוק ויציג שחקנים
                     status_str = "🟢 מקוון (Online)"
                     color = discord.Color.green()
                     players_list = server_data.get("players", [])
-                    players_str = f"{len(players_list)} / {server_data.get('sv_maxclients', 64)}"
+                    max_clients = server_data.get('sv_maxclients', 64)
+                    players_str = f"{len(players_list)} / {max_clients}"
+                    
+                    # הפעלת פקודת הקסם של הסטטוס בצד: Watching City: X / Y 🎮
+                    activity = discord.Activity(type=discord.ActivityType.watching, name=f"City: {len(players_list)} / {max_clients} 🎮")
+                    await bot.change_presence(activity=activity)
+                    
                     fivem_identifiers = []
                     for player in players_list:
                         for identifier in player.get('identifiers', []):
@@ -485,7 +487,9 @@ async def update_fivem_status():
                                 fivem_identifiers.append(int(identifier.replace('discord:', '')))
                     staff_game_count = sum(1 for m in staff_role.members if m.id in fivem_identifiers) if staff_role else 0
                     staff_str = f"{staff_game_count} אנשי צוות בעיר"
-        except: pass
+        except:
+            if status_str == "🔴 מנותק (Offline)":
+                await bot.change_presence(activity=None)
 
     embed = discord.Embed(title="📊 רשת הניטור והסטטיסטיקות הרשמית ➔ CHICAGO CITY 💎", color=color, timestamp=datetime.datetime.utcnow())
     embed.add_field(name="🎮 FIVEM GAME SERVER METRICS", value=f"```ansi\n• סטטוס השרת באוויר: {status_str}\n• שחקנים מחוברים בעיר: {players_str}\n• אנשי צוות בעיר: {staff_str}```", inline=False)
