@@ -23,7 +23,7 @@ ROLE_WARN_ADMIN = 1483039215393702012
 CHANNEL_STAFF_WARNS_LOG = 1483039219336347810
 CHANNEL_FIVEM_STATUS = 1506965475270332476 
 CHANNEL_TICKET_LOGS = 1483039219654852612
-FIVEM_IP = "135.148.36.192:30125"
+FIVEM_URL = "play.Chicagocity.com" # החיבור הרשמי החדש שלך!
 
 LOG_CHANNELS = {
     "channel_create": 1483039219654852617, "channel_delete": 1483039219654852616,
@@ -63,7 +63,7 @@ async def setup_verify(ctx):
     if ctx.guild.icon: embed.set_image(url=ctx.guild.icon.url)
     await ctx.send(embed=embed, view=VerifyView())
 
-# --- מערכת טיקטים מתקדמת עם 4 כפתורי ניהול לצוות ---
+# מערכת טיקטים עם 4 כפתורי ניהול לצוות
 class TicketControls(View):
     def __init__(self): super().__init__(timeout=None)
     
@@ -139,8 +139,6 @@ class TicketDropdown(Select):
         embed.set_footer(text="Chicago City")
         if interaction.guild.icon: embed.set_image(url=interaction.guild.icon.url)
         await ticket_channel.send(embed=embed, view=TicketControls())
-        
-        # תיוג של רול הצוות ומחיקה מיידית (Silent Ping) כדי להקפיץ להם התראה!
         p = await ticket_channel.send(f"<@&{ROLE_STAFF}>"); await p.delete()
 
 @bot.command()
@@ -151,7 +149,7 @@ async def setup_tickets(ctx):
     if ctx.guild.icon: embed.set_image(url=ctx.guild.icon.url)
     await ctx.send(embed=embed, view=View().add_item(TicketDropdown()))
 
-# מערכת הגרלות
+# הגרלות
 class AdvancedGiveawayView(View):
     def __init__(self, prize, winners):
         super().__init__(timeout=None)
@@ -192,7 +190,7 @@ async def giveaway(ctx, duration: int, winners: int, *, prize: str):
     await asyncio.sleep(duration * 60)
     if v.active: v.active = False; await end_gv(bot.get_channel(CHANNEL_GIVEAWAY), prize, winners, v.entrants, msg)
 
-# מערכת אזהרות לצוות בלבד תחת הפקודה !warn
+# אזהרות לצוות בלבד תחת הפקודה !warn
 @bot.command()
 async def warn(ctx, member: discord.Member, *, reason: str = "לא צוינה סיבה"):
     if ctx.guild.get_role(ROLE_WARN_ADMIN) not in ctx.author.roles and not ctx.author.guild_permissions.administrator:
@@ -268,6 +266,7 @@ class FiveMConnectView(View):
         super().__init__(timeout=None)
         self.add_item(discord.ui.Button(label="התחברות ישירה לעיר 🚀", style=discord.ButtonStyle.link, url="https://cfx.re"))
 
+# --- משימת הסטטוס העדכנית הפונה דרך הדומיין play.Chicagocity.com ---
 @tasks.loop(minutes=2)
 async def update_fivem_status():
     global fivem_msg_id
@@ -285,7 +284,8 @@ async def update_fivem_status():
     
     async with aiohttp.ClientSession() as session:
         try:
-            async with session.get(f"http://{FIVEM_IP}/players.json", timeout=4) as r1, session.get(f"http://{FIVEM_IP}/dynamic.json", timeout=4) as r2:
+            # פנייה חלקה וישירה דרך ה-URL שלכם למניעת חסימות חומת אש!
+            async with session.get(f"http://{FIVEM_URL}/players.json", timeout=4) as r1, session.get(f"http://{FIVEM_URL}/dynamic.json", timeout=4) as r2:
                 if r1.status == 200 and r2.status == 200:
                     players_data = await r1.json()
                     dynamic_data = await r2.json()
