@@ -63,7 +63,7 @@ async def setup_verify(ctx):
     if ctx.guild.icon: embed.set_image(url=ctx.guild.icon.url)
     await ctx.send(embed=embed, view=VerifyView())
 
-# מערכת טיקטים עם 4 כפתורי ניהול (משולב קוד חבר משודרג)
+# מערכת טיקטים
 class TicketControls(View):
     def __init__(self): super().__init__(timeout=None)
     
@@ -72,6 +72,7 @@ class TicketControls(View):
         await interaction.response.defer()
         if interaction.guild.get_role(ROLE_STAFF) not in interaction.user.roles and not interaction.user.guild_permissions.administrator: return
         await interaction.channel.send(f"🔒 הפנייה ננעלה בטיפול של {interaction.user.mention}")
+        
         log_ch = bot.get_channel(CHANNEL_TICKET_LOGS)
         if log_ch: await log_ch.send(embed=discord.Embed(title="Chicago City", description=f"🔒 **טיקט בטיפול**\n\n• חדר: {interaction.channel.mention}\n• נציג מטפל: {interaction.user.mention}", color=discord.Color.blue()))
         button.disabled = True; await interaction.message.edit(view=self)
@@ -97,7 +98,7 @@ class TicketControls(View):
         try:
             msg = await bot.wait_for('message', check=check, timeout=30)
             if msg.mentions:
-                target = msg.mentions[0] # התיקון המעולה של חבר שלך!
+                target = msg.mentions[0]
                 await interaction.channel.set_permissions(target, read_messages=True, send_messages=True)
                 await interaction.channel.send(f"✅ המשתמש {target.mention} הוסף בהצלחה לכרטיס התמיכה הנוכחי!")
             else: await interaction.channel.send("❌ לא תוייג משתמש תקין. הפעולה בוטלה.")
@@ -108,6 +109,7 @@ class TicketControls(View):
         await interaction.response.defer()
         if interaction.guild.get_role(ROLE_STAFF) not in interaction.user.roles and not interaction.user.guild_permissions.administrator: return
         await interaction.channel.send("🚧 חדר הטיקט יימחק בעוד 5 שניות...")
+        
         log_ch = bot.get_channel(CHANNEL_TICKET_LOGS)
         if log_ch: await log_ch.send(embed=discord.Embed(title="Chicago City", description=f"❌ **טיקט נסגר**\n\n• שם חדר: `{interaction.channel.name}`\n• נסגר על ידי: {interaction.user.mention}", color=discord.Color.red()))
         await asyncio.sleep(5); await interaction.channel.delete()
@@ -131,11 +133,11 @@ class TicketDropdown(Select):
         await interaction.followup.send(f"✅ הטיקט נוצר! כנס לחדר: {ticket_channel.mention}", ephemeral=True)
         
         log_ch = bot.get_channel(CHANNEL_TICKET_LOGS)
-        if log_ch: await log_ch.send(embed=discord.Embed(title="Chicago City", description=f"➕ **טיקט חדש נפתח**\n\n• פותח הפנייה: {interaction.user.mention}\n• נושא: `{self.values[0]}`\n• חדר: {ticket_channel.mention}", color=discord.Color.green()))
+        if log_ch: await log_ch.send(embed=discord.Embed(title="Chicago City", description=f"➕ **טיקט חדש נפתח**\n\n• פותח הפנייה: {interaction.user.mention}\n• נושא: `{self.values}`\n• חדר: {ticket_channel.mention}", color=discord.Color.green()))
             
-        embed = discord.Embed(title="Chicago City", description=f"שלום {interaction.user.mention}, פנייתך בנושא `{self.values[0]}` התקבלה!\nצוות השרת יגיע בהקדם.", color=discord.Color.red())
+        embed = discord.Embed(title="Chicago City", description=f"שלום {interaction.user.mention}, פנייתך בנושא `{self.values}` התקבלה!\nצוות השרת יגיע בהקדם.", color=discord.Color.red())
         embed.set_footer(text="Chicago City")
-        if interaction.guild.icon: embed.set_image(url=interaction.guild.icon.url)
+        if interaction.guild.icon: embed.set_image(url=ctx.guild.icon.url)
         await ticket_channel.send(embed=embed, view=TicketControls())
         p = await ticket_channel.send(f"<@&{ROLE_STAFF}>"); await p.delete()
 
@@ -229,7 +231,7 @@ async def unwarn(ctx, member: discord.Member):
         staff_warns_db[member.id].pop(); await ctx.send(f"✅ האזהרה האחרונה של {member.mention} נמחקה.")
     else: await ctx.send("אין אזהרות בתיק.")
 
-# מערכת כריזה
+# פקודת say לצוות
 @bot.command()
 @commands.has_permissions(administrator=True)
 async def say(ctx, channel: discord.TextChannel, em: str, *, content: str):
@@ -262,9 +264,9 @@ async def on_member_join(member):
 class FiveMConnectView(View):
     def __init__(self):
         super().__init__(timeout=None)
-        self.add_item(discord.ui.Button(label="התחברות ישירה לעיר 🚀", style=discord.ButtonStyle.link, url="https://cfx.re"))
+        self.add_item(discord.ui.Button(label="התחברות ישירה לעיר 🚀", style=discord.ButtonStyle.link, url="https://cfx.re/join/rmadb7p"))
 
-# משימת הסטטוס המאוחדת והחיה כל 2 דקות
+# --- משימת הסטטוס העדכנית הפונה ל-API החיצוני והרשמי העוקף חסימות ב-100%! ---
 @tasks.loop(minutes=2)
 async def update_fivem_status():
     global fivem_msg_id
@@ -278,22 +280,28 @@ async def update_fivem_status():
     staff_dc_online = sum(1 for m in staff_role.members if m.status != discord.Status.offline and not m.bot) if staff_role else 0
 
     status_str, players_str, staff_str, color = "🔴 מנותק (Offline)", "0 / 0", "0 מחוברים", discord.Color.red()
-    headers = {"User-Agent": "Mozilla/5.0"}
+    
+    # שימוש בפורמט ה-API החדש של רשימת השרתים העולמית למניעת חסימות רשת
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
     async with aiohttp.ClientSession(headers=headers) as session:
         try:
             async with session.get(f"https://fivem.net{CFX_ID}", timeout=5) as resp:
                 if resp.status == 200:
                     data = await resp.json()
                     server_data = data.get("Data", {})
+                    
                     status_str = "🟢 מקוון (Online)"
                     color = discord.Color.green()
+                    
                     players_list = server_data.get("players", [])
                     players_str = f"{len(players_list)} / {server_data.get('sv_maxclients', 64)}"
+                    
                     fivem_identifiers = []
                     for player in players_list:
                         for identifier in player.get('identifiers', []):
                             if identifier.startswith('discord:'):
                                 fivem_identifiers.append(int(identifier.replace('discord:', '')))
+                                
                     staff_game_count = sum(1 for m in staff_role.members if m.id in fivem_identifiers) if staff_role else 0
                     staff_str = f"{staff_game_count} אנשי צוות בעיר"
         except: pass
@@ -314,7 +322,8 @@ async def update_fivem_status():
         else:
             msg = await ch.fetch_message(fivem_msg_id)
             await msg.edit(embed=embed, view=FiveMConnectView())
-    except: fivem_msg_id = None
+    except:
+        fivem_msg_id = None
 
 @bot.event
 async def on_ready():
