@@ -39,10 +39,10 @@ async def send_log(event_name, embed):
         channel = bot.get_channel(ch_id)
         if channel: await channel.send(embed=embed)
 
-# מערכת אימות נקי — Chicago City
+# מערכת אימות עם הטקסטים שלך
 class VerifyView(View):
     def __init__(self): super().__init__(timeout=None)
-    @discord.ui.button(label="לחץ כאן לאימות 🛡️", style=discord.ButtonStyle.green, custom_id="verify_btn")
+    @discord.ui.button(label="לחצו לאימות המשתמש 🛡️", style=discord.ButtonStyle.green, custom_id="verify_btn")
     async def verify_button(self, interaction: discord.Interaction, button: Button):
         await interaction.response.defer(ephemeral=True)
         role = interaction.guild.get_role(ROLE_VERIFIED)
@@ -54,12 +54,12 @@ class VerifyView(View):
 @bot.command()
 @commands.has_permissions(administrator=True)
 async def setup_verify(ctx):
-    embed = discord.Embed(title="Chicago City", description="ברוכים הבאים לשרת הרשמי!\n\n**לחצו על הכפתור הירוק למטה כדי לקבל את רול התושב וגישה מלאה לערוצי השרת!**", color=discord.Color.from_rgb(46, 204, 113))
+    embed = discord.Embed(title="Chicago City Verify", description="כדי לקבל גישה ולראות את החדרים לחצו ואמתו את עצמכם", color=discord.Color.from_rgb(46, 204, 113))
     embed.set_footer(text="Chicago City")
     if ctx.guild.icon: embed.set_image(url=ctx.guild.icon.url)
     await ctx.send(embed=embed, view=VerifyView())
 
-# מערכת טיקטים נקי — Chicago City
+# מערכת טיקטים עם הטקסטים והאימוג'ים שלך
 class TicketControls(View):
     def __init__(self): super().__init__(timeout=None)
     @discord.ui.button(label="קח טיפול 🙋‍♂️", style=discord.ButtonStyle.blurple, custom_id="tk_claim")
@@ -79,12 +79,12 @@ class TicketControls(View):
 class TicketDropdown(Select):
     def __init__(self):
         options = [
-            discord.SelectOption(label="בחינה לצוות השרת", emoji="📝", value="צוות"),
-            discord.SelectOption(label="דיווח על שחקן", emoji="🚫", value="דיווח"),
-            discord.SelectOption(label="דיווח על באג", emoji="🐛", value="באג"),
-            discord.SelectOption(label="שאלה כללית", emoji="❓", value="כללי")
+            discord.SelectOption(label="דיווח על איש צוות / שחקן", emoji="🚫", value="דיווח"),
+            discord.SelectOption(label="בחינה לצוות", emoji="📝", value="בחינה לצוות"),
+            discord.SelectOption(label="דיווח על באג", emoji="🐛", value="דיווח באג"),
+            discord.SelectOption(label="שאלה כללית", emoji="❓", value="שאלה כללית")
         ]
-        super().__init__(placeholder="בחר את נושא הפנייה לפתיחת טיקט... 📂", options=options, custom_id="tk_select")
+        super().__init__(placeholder="בחר קטגוריית פנייה... 🎫", options=options, custom_id="tk_select")
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
@@ -102,12 +102,12 @@ class TicketDropdown(Select):
 @bot.command()
 @commands.has_permissions(administrator=True)
 async def setup_tickets(ctx):
-    embed = discord.Embed(title="Chicago City", description="**בחר את המחלקה המתאימה בתפריט למטה לפתיחת חדר תמיכה!**", color=discord.Color.purple())
+    embed = discord.Embed(title="Chicago City Ticket room", description="בחרו קטגוריה ופתחו טיקט וצוות השרת יחזור אליכם בהקדם", color=discord.Color.purple())
     embed.set_footer(text="Chicago City")
     if ctx.guild.icon: embed.set_image(url=ctx.guild.icon.url)
     await ctx.send(embed=embed, view=View().add_item(TicketDropdown()))
 
-# מערכת הגרלות נקי
+# מערכת הגרלות
 class AdvancedGiveawayView(View):
     def __init__(self, prize, winners):
         super().__init__(timeout=None)
@@ -148,7 +148,7 @@ async def giveaway(ctx, duration: int, winners: int, *, prize: str):
     await asyncio.sleep(duration * 60)
     if v.active: v.active = False; await end_gv(bot.get_channel(CHANNEL_GIVEAWAY), prize, winners, v.entrants, msg)
 
-# מערכת אזהרות צוות נקי — Chicago City
+# מערכת אזהרות לצוות בלבד תחת הפקודה !warn
 @bot.command()
 async def warn(ctx, member: discord.Member, *, reason: str = "לא צוינה סיבה"):
     if ctx.guild.get_role(ROLE_WARN_ADMIN) not in ctx.author.roles and not ctx.author.guild_permissions.administrator:
@@ -189,7 +189,7 @@ async def unwarn(ctx, member: discord.Member):
         staff_warns_db[member.id].pop(); await ctx.send(f"✅ האזהרה האחרונה של {member.mention} נמחקה.")
     else: await ctx.send("אין אזהרות בתיק.")
 
-# מערכת כריזה וחדשות
+# מערכת כריזה
 @bot.command()
 @commands.has_permissions(administrator=True)
 async def say(ctx, channel: discord.TextChannel, em: str, *, content: str):
