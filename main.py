@@ -1,7 +1,7 @@
 import discord
 from discord.ext import commands, tasks
 from discord.ui import Button, View, Select
-import asyncio, datetime, os, random
+import asyncio, datetime, os, random, aiohttp
 from flask import Flask
 from threading import Thread
 
@@ -21,6 +21,8 @@ ROLE_STAFF = 1483039215364345930
 CHANNEL_GIVEAWAY = 1483039216366780532
 ROLE_WARN_ADMIN = 1483039215393702012
 CHANNEL_STAFF_WARNS_LOG = 1483039219336347810
+CHANNEL_FIVEM_STATUS = 1506965475270332476 # החדר ששלחת עכשיו!
+FIVEM_IP = "135.148.36.192:30125"
 
 LOG_CHANNELS = {
     "channel_create": 1483039219654852617, "channel_delete": 1483039219654852616,
@@ -32,6 +34,7 @@ LOG_CHANNELS = {
 }
 
 staff_warns_db, invites_cache = {}, {}
+fivem_msg_id = None
 
 async def send_log(event_name, embed):
     ch_id = LOG_CHANNELS.get(event_name)
@@ -39,7 +42,7 @@ async def send_log(event_name, embed):
         channel = bot.get_channel(ch_id)
         if channel: await channel.send(embed=embed)
 
-# מערכת אימות עם הטקסטים שלך
+# מערכת אימות
 class VerifyView(View):
     def __init__(self): super().__init__(timeout=None)
     @discord.ui.button(label="לחצו לאימות המשתמש 🛡️", style=discord.ButtonStyle.green, custom_id="verify_btn")
@@ -59,7 +62,7 @@ async def setup_verify(ctx):
     if ctx.guild.icon: embed.set_image(url=ctx.guild.icon.url)
     await ctx.send(embed=embed, view=VerifyView())
 
-# מערכת טיקטים עם הטקסטים והאימוג'ים שלך
+# מערכת טיקטים
 class TicketControls(View):
     def __init__(self): super().__init__(timeout=None)
     @discord.ui.button(label="קח טיפול 🙋‍♂️", style=discord.ButtonStyle.blurple, custom_id="tk_claim")
@@ -236,8 +239,70 @@ async def update_stats():
             await up("👥 Total Members:", g.member_count); await up("🟢 Online Users:", online); await up("🛡️ Staff Online:", staff)
         except: pass
 
+# --- משימה אוטומטית לעדכון סטטוס שרת FiveM (FIVEM LIVE STATUS TRACKER) ---
+@tasks.loop(minutes=5)
+async def update_fivem_status():
+    global fivem_msg_id
+    ch = bot.get_channel(CHANNEL_FIVEM_STATUS)
+    if not ch: return
+    
+    status_str, players_str, staff_str, color = "🔴 מנותק (Offline)", "0 / 0", "0 מחוברים", discord.Color.red()
+    
+    async with aiohttp.ClientSession() as session:
+        try:
+            # פנייה מאובטחת וישירה לשרת ה-FiveM שלכם לשאיבת שחקנים ונתונים
+            async with session.get(f"http://{FIVEM_IP}/players.json", timeout=4) as r1, session.get(f"http://{FIVEM_IP}/dynamic.json", timeout=4) as r2:
+                if r1.status == 200 and r2.status == 200:
+                    players_data = await r1.json()
+                    dynamic_data = await r2.json()
+                    
+                    status_str = "🟢 מקוון (Online)"
+                    color = discord.Color.green()
+                    players_str = f"{len(players_data)} / {dynamic_data.get('maxclients', 64)}"
+                    
+                    # פונקציה חכמה שסורקת בדיסקורד מי מהשחקנים מחובר כרגע בתוך ה-FiveM ומחזיק ברול צוות
+                    staff_count = 0
+                    guild = ch.guild
+                    staff_role = guild.get_role(ROLE_STAFF)
+                    
+                    if staff_role:
+                        # שואב את כל האיידיז של השחקנים שנמצאים כרגע בשרת ה-FiveM ומבצע הצלבה מול דיסקורד
+                        fivem_identifiers = []
+                        for player in players_data:
+                            for identifier in player.get('identifiers', []):
+                                if identifier.startswith('discord:'):
+                                    fivem_identifiers.append(int(identifier.replace('discord:', '')))
+                                    
+                        staff_count = sum(1 for m in staff_role.members if m.id in fivem_identifiers)
+                    staff_str = f"{staff_count} אנשי צוות בעיר"
+        except: pass
+
+    embed = discord.Embed(title="Chicago City — Status", color=color, timestamp=datetime.datetime.utcnow())
+    embed.add_field(name="🌐 סטטוס שרת FiveM", value=f"```\n{status_str}```", inline=False)
+    embed.add_field(name="👥 שחקנים בעיר", value=f"```\n{players_str}```", inline=True)
+    embed.add_field(name="🛡️ אנשי צוות בעיר", value=f"```\n{staff_str}```", inline=True)
+    embed.set_footer(text="Chicago City")
+    if ch.guild.icon: embed.set_thumbnail(url=ch.guild.icon.url)
+
+    try:
+        if fivem_msg_id is None:
+            # מחפש הודעה קודמת של הבוט בחדר כדי למנוע הצפות
+            async for m in ch.history(limit=5):
+                if m.author == bot.user and m.embeds and m.embeds[0].title == "Chicago City — Status":
+                    fivem_msg_id = m.id; await m.edit(embed=embed); return
+            msg = await ch.send(embed=embed)
+            fivem_msg_id = msg.id
+        else:
+            msg = await ch.fetch_message(fivem_msg_id)
+            await msg.edit(embed=embed)
+    except:
+        fivem_msg_id = None
+
 @bot.event
-async def on_ready(): print(f"Logged in as {bot.user.name}"); update_stats.start()
+async def on_ready():
+    print(f"Logged in as {bot.user.name}")
+    update_stats.start()
+    if not update_fivem_status.is_running(): update_fivem_status.start()
 
 keep_alive()
 bot.run(os.environ['DISCORD_TOKEN'])
