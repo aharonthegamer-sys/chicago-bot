@@ -222,12 +222,11 @@ async def on_member_join(member):
         if member.guild.icon: embed.set_image(url=member.guild.icon.url)
         await w_ch.send(embed=embed)
 
-# --- משימה מאוחדת ומעוצבת עם כפתור חיבור ישיר (STATUS TRACKER + CONNECT BUTTON) ---
+# תיקון הכפתור של הקישור - בלי custom_id!
 class FiveMConnectView(View):
-    def __init__(self): super().__init__(timeout=None)
-    # יצירת כפתור רשמי שפותח את המשחק ומחבר את המשתמש ישירות לעיר!
-    @discord.ui.button(label="התחברות ישירה לעיר 🚀", style=discord.ButtonStyle.premium, url=f"https://cfx.re", custom_id="fivem_conn_btn")
-    async def connect_button(self, interaction: discord.Interaction, button: Button): pass
+    def __init__(self):
+        super().__init__(timeout=None)
+        self.add_item(discord.ui.Button(label="התחברות ישירה לעיר 🚀", style=discord.ButtonStyle.link, url="https://cfx.re"))
 
 @tasks.loop(minutes=5)
 async def update_fivem_status():
@@ -265,14 +264,12 @@ async def update_fivem_status():
                     staff_str = f"{staff_game_count} אנשי צוות בעיר"
         except: pass
 
-    # עיצוב מטורף ונקי של הטבלה המשותפת
     embed = discord.Embed(title="Chicago City — Status", color=color, timestamp=datetime.datetime.utcnow())
     embed.add_field(name="🎮 FIVEM STATUS", value=f"• סטטוס השרת: `{status_str}`\n• שחקנים בעיר: `{players_str}`\n• צוות בתוך העיר: `{staff_str}`", inline=False)
     embed.add_field(name="💬 DISCORD STATUS", value=f"• סך הכל תושבים: `{total_dc_members} אזרחים`\n• משתמשים אונליין: `{online_dc_users} מחוברים`\n• אנשי צוות אונליין: `{staff_dc_online} זמינים`", inline=False)
     embed.set_footer(text="Chicago City • ערוץ סטטוס רשמי")
     if guild.icon: embed.set_thumbnail(url=guild.icon.url)
 
-    # שליחה מבוקרת עם ה-Connect Button המובנה למטה!
     try:
         if fivem_msg_id is None:
             async for m in ch.history(limit=5):
