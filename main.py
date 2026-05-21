@@ -1,5 +1,5 @@
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 from discord.ui import Button, View, Select
 import asyncio
 import datetime
@@ -26,6 +26,7 @@ intents.message_content = True
 intents.members = True
 intents.guilds = True
 intents.messages = True
+intents.presences = True  # חובה בשביל לספור מחוברים ואנשי צוות אונליין!
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
@@ -179,11 +180,11 @@ async def setup_tickets(ctx):
         description="```📊 מערכת ניהול הפניות והתמיכה של השרת```\n\nצריכים עזרה, רוצים לדווח על באג או להגיש מועמדות לצוות הניהול?\n\n**בחר את המחלקה המתאימה בתפריט למטה והבוט יפתח עבורך חדר מאובטח מול הצוות!**",
         color=discord.Color.from_rgb(155, 89, 182)
     )
-    embed.set_image(url="https://discordapp.com&")
+    embed.set_image(url="https://discordapp.com")
     embed.set_footer(text="Chicago City Support Operations", icon_url=ctx.guild.icon.url if ctx.guild.icon else None)
     await ctx.send(embed=embed, view=TicketDropdownView())
 
-# מערכת הגרלות (GIVEAWAYS)
+# הגרלות (GIVEAWAYS)
 class AdvancedGiveawayView(View):
     def __init__(self, prize, winners_count):
         super().__init__(timeout=None)
@@ -366,7 +367,7 @@ async def on_message_delete(message):
     embed = discord.Embed(title="🗑️ הודעה נמחקה", description=f"**כותב ההודעה:** {message.author.mention}\n**ערוץ:** {message.channel.mention}\n\n**תוכן ההודעה:**\n{message.content}", color=discord.Color.red())
     await send_log("message_delete", embed)
 
-# מערכת וולקם (WELCOME SYSTEM)
+# מערכת וולקם
 @bot.event
 async def on_member_join(member):
     embed = discord.Embed(title="📥 משתמש חדש נכנס", description=f"משתמש: {member.mention}\nשם משתמש: {member.name}\nאיידי: {member.id}", color=discord.Color.green())
@@ -381,11 +382,11 @@ async def on_member_join(member):
             timestamp=datetime.datetime.utcnow()
         )
         w_embed.set_thumbnail(url=member.display_avatar.url)
-        w_embed.set_image(url="https://discordapp.com&")
+        w_embed.set_image(url="https://discordapp.com")
         w_embed.set_footer(text="Chicago City Security System")
         await welcome_channel.send(embed=w_embed)
 
-    # מערכת אינוויט טראקר (INVITE TRACKER)
+    # מערכת אינוויט טראקר
     invites_before = invites_cache.get(member.guild.id, {})
     try:
         invites_after = await member.guild.invites()
@@ -423,6 +424,47 @@ async def on_member_remove(member):
     embed = discord.Embed(title="📤 משתמש עזב את השרת", description=f"משתמש: {member.mention}\nשם: {member.name}", color=discord.Color.light_grey())
     await send_log("member_leave", embed)
 
+# --- משימה אוטומטית לעדכון סטטיסטיקות שרת חיות (SERVER STATS TRACKER) ---
+@tasks.loop(minutes=10)
+async def update_stats():
+    for guild in bot.guilds:
+        # סופר סך הכל משתמשים
+        total_members = guild.member_count
+        
+        # סופר מחוברים אונליין
+        online_members = sum(1 for m in guild.members if m.status != discord.Status.offline and not m.bot)
+        
+        # סופר אנשי צוות אונליין
+        staff_role = guild.get_role(ROLE_STAFF)
+        staff_online = 0
+        if staff_role:
+            staff_online = sum(1 for m in staff_role.members if m.status != discord.Status.offline and not m.bot)
+            
+        # חיפוש או יצירה אוטומטית של חדרים בראש השרת
+        category = guild.categories[0] if guild.categories else None
+        
+        async def update_or_create_vc(name_prefix, value):
+            expected_name = f"{name_prefix} {value}"
+            channel = discord.utils.get(guild.voice_channels, name=expected_name)
+            if not channel:
+                # מחפש חדר קיים שמתחיל באותו פסוק כדי לשנות לו שם
+                for vc in guild.voice_channels:
+                    if vc.name.startswith(name_prefix):
+                        await vc.edit(name=expected_name)
+                        return
+                # אם לא נמצא בכלל, יוצר חדר נעול חדש
+                overwrites = {guild.default_role: discord.PermissionOverwrite(connect=False)}
+                await guild.create_voice_channel(name=expected_name, category=category, overwrites=overwrites)
+            else:
+                await channel.edit(name=expected_name)
+
+        try:
+            await update_or_create_vc("👥 Total Members:", total_members)
+            await update_or_create_vc("🟢 Online Users:", online_members)
+            await update_or_create_vc("🛡️ Staff Online:", staff_online)
+        except Exception as e:
+            print(f"Stats update error: {e}")
+
 @bot.event
 async def on_ready():
     print(f"Logged in as {bot.user.name}")
@@ -433,6 +475,10 @@ async def on_ready():
             invites_cache[guild.id] = {invite.code: invite.uses for invite in invites}
         except: pass
     print("Invite cache seeded for Chicago City")
+    
+    # מפעיל את משימת הסטטיסטיקות החיות ברקע!
+    if not update_stats.is_running():
+        update_stats.start()
 
 keep_alive()
 
