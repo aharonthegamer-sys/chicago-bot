@@ -62,7 +62,7 @@ async def setup_verify(ctx):
     if ctx.guild.icon: embed.set_image(url=ctx.guild.icon.url)
     await ctx.send(embed=embed, view=VerifyView())
 
-# מערכת טיקטים
+# מערכת טיקטים עם לוגים מובנים
 class TicketControls(View):
     def __init__(self): super().__init__(timeout=None)
     @discord.ui.button(label="קח טיפול 🙋‍♂️", style=discord.ButtonStyle.blurple, custom_id="tk_claim")
@@ -70,6 +70,11 @@ class TicketControls(View):
         await interaction.response.defer()
         if interaction.guild.get_role(ROLE_STAFF) not in interaction.user.roles: return
         await interaction.channel.send(f"🔒 הפנייה ננעלה בטיפול של {interaction.user.mention}")
+        
+        # לוג קח טיפול
+        log_embed = discord.Embed(title="🎫 טיקט בטיפול", description=f"**חדר:** {interaction.channel.mention}\n**נציג מטפל:** {interaction.user.mention}", color=discord.Color.blue())
+        await send_log("channel_create", log_embed)
+        
         button.disabled = True; await interaction.message.edit(view=self)
 
     @discord.ui.button(label="סגור פנייה ❌", style=discord.ButtonStyle.red, custom_id="tk_close")
@@ -77,6 +82,11 @@ class TicketControls(View):
         await interaction.response.defer()
         if interaction.guild.get_role(ROLE_STAFF) not in interaction.user.roles: return
         await interaction.channel.send("🚧 חדר הטיקט יימחק בעוד 5 שניות...")
+        
+        # לוג סגירת טיקט
+        log_embed = discord.Embed(title="❌ טיקט נסגר", description=f"**שם החדר שנמחק:** `{interaction.channel.name}`\n**נסגר ע''י:** {interaction.user.mention}", color=discord.Color.red())
+        await send_log("channel_create", log_embed)
+        
         await asyncio.sleep(5); await interaction.channel.delete()
 
 class TicketDropdown(Select):
@@ -96,6 +106,11 @@ class TicketDropdown(Select):
         await ticket_channel.set_permissions(interaction.user, read_messages=True, send_messages=True)
         await ticket_channel.set_permissions(interaction.guild.get_role(ROLE_STAFF), read_messages=True, send_messages=True)
         await interaction.followup.send(f"✅ הטיקט נוצר! כנס לחדר: {ticket_channel.mention}", ephemeral=True)
+        
+        # לוג פתיחת טיקט
+        log_embed = discord.Embed(title="➕ טיקט חדש נפתח", description=f"**פותח הפנייה:** {interaction.user.mention}\n**נושא:** `{self.values}`\n**חדר:** {ticket_channel.mention}", color=discord.Color.green())
+        await send_log("channel_create", log_embed)
+        
         embed = discord.Embed(title="Chicago City", description=f"שלום {interaction.user.mention}, פנייתך בנושא `{self.values}` התקבלה!\nצוות השרת יגיע בהקדם.", color=discord.Color.red())
         embed.set_footer(text="Chicago City")
         if interaction.guild.icon: embed.set_image(url=interaction.guild.icon.url)
@@ -227,7 +242,6 @@ class FiveMConnectView(View):
         super().__init__(timeout=None)
         self.add_item(discord.ui.Button(label="התחברות ישירה לעיר 🚀", style=discord.ButtonStyle.link, url="https://cfx.re"))
 
-# --- עדכון משימת הסטטוס ל-2 דקות בלבד (MINUTES=2) ---
 @tasks.loop(minutes=2)
 async def update_fivem_status():
     global fivem_msg_id
