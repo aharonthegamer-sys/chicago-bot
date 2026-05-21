@@ -22,6 +22,7 @@ CHANNEL_GIVEAWAY = 1483039216366780532
 ROLE_WARN_ADMIN = 1483039215393702012
 CHANNEL_STAFF_WARNS_LOG = 1483039219336347810
 CHANNEL_FIVEM_STATUS = 1506965475270332476 
+CHANNEL_TICKET_LOGS = 1483039219654852612 # החדר החדש של לוגי הטיקטים ששלחת!
 FIVEM_IP = "135.148.36.192:30125"
 
 LOG_CHANNELS = {
@@ -62,7 +63,7 @@ async def setup_verify(ctx):
     if ctx.guild.icon: embed.set_image(url=ctx.guild.icon.url)
     await ctx.send(embed=embed, view=VerifyView())
 
-# מערכת טיקטים עם לוגים מובנים
+# מערכת טיקטים עם חלון לוגים ייעודי ומבודד
 class TicketControls(View):
     def __init__(self): super().__init__(timeout=None)
     @discord.ui.button(label="קח טיפול 🙋‍♂️", style=discord.ButtonStyle.blurple, custom_id="tk_claim")
@@ -71,10 +72,12 @@ class TicketControls(View):
         if interaction.guild.get_role(ROLE_STAFF) not in interaction.user.roles: return
         await interaction.channel.send(f"🔒 הפנייה ננעלה בטיפול של {interaction.user.mention}")
         
-        # לוג קח טיפול
-        log_embed = discord.Embed(title="🎫 טיקט בטיפול", description=f"**חדר:** {interaction.channel.mention}\n**נציג מטפל:** {interaction.user.mention}", color=discord.Color.blue())
-        await send_log("channel_create", log_embed)
-        
+        # שולח לוג לערוץ הטיקטים הייעודי
+        log_ch = bot.get_channel(CHANNEL_TICKET_LOGS)
+        if log_ch:
+            embed = discord.Embed(title="Chicago City", description=f"🔒 **טיקט בטיפול**\n\n• חדר: {interaction.channel.mention}\n• נציג מטפל: {interaction.user.mention}", color=discord.Color.blue())
+            await log_ch.send(embed=embed)
+            
         button.disabled = True; await interaction.message.edit(view=self)
 
     @discord.ui.button(label="סגור פנייה ❌", style=discord.ButtonStyle.red, custom_id="tk_close")
@@ -83,10 +86,12 @@ class TicketControls(View):
         if interaction.guild.get_role(ROLE_STAFF) not in interaction.user.roles: return
         await interaction.channel.send("🚧 חדר הטיקט יימחק בעוד 5 שניות...")
         
-        # לוג סגירת טיקט
-        log_embed = discord.Embed(title="❌ טיקט נסגר", description=f"**שם החדר שנמחק:** `{interaction.channel.name}`\n**נסגר ע''י:** {interaction.user.mention}", color=discord.Color.red())
-        await send_log("channel_create", log_embed)
-        
+        # שולח לוג סגירה לערוץ הטיקטים הייעודי
+        log_ch = bot.get_channel(CHANNEL_TICKET_LOGS)
+        if log_ch:
+            embed = discord.Embed(title="Chicago City", description=f"❌ **טיקט נסגר**\n\n• שם חדר: `{interaction.channel.name}`\n• נסגר על ידי: {interaction.user.mention}", color=discord.Color.red())
+            await log_ch.send(embed=embed)
+            
         await asyncio.sleep(5); await interaction.channel.delete()
 
 class TicketDropdown(Select):
@@ -107,10 +112,12 @@ class TicketDropdown(Select):
         await ticket_channel.set_permissions(interaction.guild.get_role(ROLE_STAFF), read_messages=True, send_messages=True)
         await interaction.followup.send(f"✅ הטיקט נוצר! כנס לחדר: {ticket_channel.mention}", ephemeral=True)
         
-        # לוג פתיחת טיקט
-        log_embed = discord.Embed(title="➕ טיקט חדש נפתח", description=f"**פותח הפנייה:** {interaction.user.mention}\n**נושא:** `{self.values}`\n**חדר:** {ticket_channel.mention}", color=discord.Color.green())
-        await send_log("channel_create", log_embed)
-        
+        # שולח לוג פתיחה לערוץ הטיקטים הייעודי
+        log_ch = bot.get_channel(CHANNEL_TICKET_LOGS)
+        if log_ch:
+            embed = discord.Embed(title="Chicago City", description=f"➕ **טיקט חדש נפתח**\n\n• פותח הפנייה: {interaction.user.mention}\n• נושא: `{self.values}`\n• חדר: {ticket_channel.mention}", color=discord.Color.green())
+            await log_ch.send(embed=embed)
+            
         embed = discord.Embed(title="Chicago City", description=f"שלום {interaction.user.mention}, פנייתך בנושא `{self.values}` התקבלה!\nצוות השרת יגיע בהקדם.", color=discord.Color.red())
         embed.set_footer(text="Chicago City")
         if interaction.guild.icon: embed.set_image(url=interaction.guild.icon.url)
