@@ -151,8 +151,6 @@ class VerifyView(discord.ui.View):
 # ========================================================
 # 5. מערכת מודאלים (חלונות קופצים) לניהול הטיקט
 # ========================================================
-
-# חלון קופץ לשינוי שם הטיקט
 class RenameTicketModal(discord.ui.Modal, title="📝 שינוי שם הערוץ"):
     new_name = discord.ui.TextInput(label="הזן שם חדש לערוץ (באותיות קטנות ואנגלית)", placeholder="e.g., bug-fixed", required=True, min_length=3, max_length=20)
 
@@ -166,7 +164,6 @@ class RenameTicketModal(discord.ui.Modal, title="📝 שינוי שם הערוץ
         )
         await interaction.response.send_message(embed=embed)
 
-# חלון קופץ להוספת משתמש לטיקט
 class AddMemberModal(discord.ui.Modal, title="👤 הוספת חבר לטיקט"):
     member_id = discord.ui.TextInput(label="הזן את ה-ID של המשתמש", placeholder="e.g., 1483039214793789483", required=True, min_length=15, max_length=20)
 
@@ -195,14 +192,12 @@ class TicketControlView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    # כפתור סגירה
     @discord.ui.button(label="🔒 סגור טיקט", style=discord.ButtonStyle.danger, custom_id="btn_close_t")
     async def close_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_message("🛑 הטיקט ייסגר ויימחק מהמערכת בעוד 5 שניות...", ephemeral=False)
         await asyncio.sleep(5)
         await interaction.channel.delete()
 
-    # כפתור לקיחת טיפול (Claim)
     @discord.ui.button(label="🙋‍♂️ קח טיפול (Claim)", style=discord.ButtonStyle.success, custom_id="btn_claim_t")
     async def claim_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
         staff_role = interaction.guild.get_role(STAFF_ROLE_ID)
@@ -220,7 +215,6 @@ class TicketControlView(discord.ui.View):
         await interaction.response.edit_message(view=self)
         await interaction.channel.send(embed=embed)
 
-    # כפתור שינוי שם
     @discord.ui.button(label="✏️ שינוי שם", style=discord.ButtonStyle.primary, custom_id="btn_rename_t")
     async def rename_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
         staff_role = interaction.guild.get_role(STAFF_ROLE_ID)
@@ -228,7 +222,6 @@ class TicketControlView(discord.ui.View):
             return await interaction.response.send_message("❌ הרשאה זו חסומה עבורך.", ephemeral=True)
         await interaction.response.send_modal(RenameTicketModal())
 
-    # כפתור הוספת משתמש
     @discord.ui.button(label="➕ הוסף משתמש", style=discord.ButtonStyle.secondary, custom_id="btn_add_m_t")
     async def add_member(self, interaction: discord.Interaction, button: discord.ui.Button):
         staff_role = interaction.guild.get_role(STAFF_ROLE_ID)
@@ -293,7 +286,7 @@ class TicketDropdown(discord.ui.Select):
         embed.timestamp = discord.utils.utcnow()
 
         await channel.send(embed=embed, view=TicketControlView())
-        await interaction.response.send_message(f"✅ הפנייה שלך נוצרה בהצלחה בחדר: {channel.mention}", ephemeral=True)
+        await interaction.response.send_message(f"✅ flap פנייה נוצרה: {channel.mention}", ephemeral=True)
 
 class TicketOpenView(discord.ui.View):
     def __init__(self):
@@ -333,9 +326,13 @@ async def setup_tickets(ctx):
     embed.set_footer(text="Chicago City Support Center")
     await ctx.send(embed=embed, view=TicketOpenView())
 
-# --- מערכת הצעות משודרגת ---
 @bot.command()
 async def suggest(ctx, *, suggestion: str):
     await ctx.message.delete()
     embed = discord.Embed(
         title="💡 הצעה חדשה מהקהילה",
+        description=f"```{suggestion}```",
+        color=0xf1c40f
+    )
+    embed.set_author(name=ctx.author.name, icon_url=ctx.author.display_avatar.url)
+    embed.add_field(name="📊 מדד הצבעות", value="הצבע באמצעות האימוג'ים המופיעים מטה:", inline=False)
