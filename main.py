@@ -11,7 +11,7 @@ app = Flask('')
 
 @app.route('/')
 def home():
-    return "Chicago City Bot is Ready!"
+    return "Status Bot Online!"
 
 def run_flask():
     port = int(os.environ.get("PORT", 10000))
@@ -22,68 +22,67 @@ def keep_alive():
     t.daemon = True
     t.start()
 
-# נתונים קבועים ומדויקים של שרת שיקגו סיטי
+# נתונים קבועים ומדויקים של שיקגו סיטי
 SERVER_NAME = "Chicago City"
 CFX_CODE = "rmadb7p"
 SERVER_IP = "135.148.36.192:30125"
 GUILD_ID = 1483039214793789483
 STATUS_CHANNEL_ID = 1506965475270332476
 VERIFY_ROLE_ID = 1483039214793789489
-STAFF_ROLE_ID = 1483039215364345930
 
 intents = discord.Intents.default()
 intents.messages = True
-intents.message_content = True
-intents.members = True        
 intents.guilds = True         
+intents.members = True        
 
 bot = commands.Bot(command_prefix="!", intents=intents)
+status_message = None
 
 @tasks.loop(seconds=60)
-async def update_fivem_status():
+async def update_status():
+    global status_message
     await bot.wait_until_ready()
     
     guild = bot.get_guild(GUILD_ID)
     channel = bot.get_channel(STATUS_CHANNEL_ID)
 
     if not guild or not channel:
+        print("[ERROR] Guild or Channel not found!")
         return
 
-    # חישוב נתוני דיסקורד
+    # נתוני דיסקורד בסיסיים שחסינים מקריסות
     total_members = guild.member_count
-    staff_role = guild.get_role(STAFF_ROLE_ID)
-    total_staff = len(staff_role.members) if staff_role else 0
 
+    # ערכי ברירת מחדל
     clients = 0
     max_clients = 32
     status_text = "🟢 פעיל (Online)"
     embed_color = discord.Color.green()
 
-    # משיכת נתונים ישירות מה-API הציבורי של FiveM
+    # קריאת נתוני FiveM מוגנת בתוך בלוק try/except שלא מסוגל לתקוע את הבוט
     url = f"https://fivem.net{CFX_CODE}"
     headers = {"User-Agent": "Mozilla/5.0"}
     
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.get(url, headers=headers, timeout=8) as response:
+            async with session.get(url, headers=headers, timeout=5) as response:
                 if response.status == 200:
                     data = await response.json()
                     server_data = data.get('Data', {})
                     if server_data:
                         clients = server_data.get('clients', 0)
                         max_clients = server_data.get('sv_maxclients', 32)
+                else:
+                    status_text = "🔴 מנותק / תחזוקה"
+                    embed_color = discord.Color.red()
     except:
-        status_text = "🔴 מנותק (Offline)"
+        status_text = "🔴 מנותק / שגיאת API"
         embed_color = discord.Color.red()
 
-    # הפיכת הסטטוס המשחקי ל-Watching האמיתי שביקשת (מופיע מתחת לפרופיל)
-    activity_text = f"Chicago City | {clients}/{max_clients}"
-    await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name=activity_text))
-
-    # בניית ה-Embed המפואר והמושקע
+    # בניית ה-Embed המעוצב לחדר
     embed = discord.Embed(
         title=f"📊 סטטוס רשת | {SERVER_NAME}",
-        description="הנתונים של שרת המשחק והדיסקורד מתעדכנים אוטומטית כל דקה.",
+        description="הנתונים מתעדכנים באופן אוטומטי לחלוטין בכל 60 שניות.",
         color=embed_color
     )
     embed.add_field(
@@ -93,36 +92,36 @@ async def update_fivem_status():
     )
     embed.add_field(
         name="👥 שרת הדיסקורד (Discord)",
-        value=f"```properties\nTotal Members      : {total_members}\nTotal Staff Members: {total_staff}\n```",
+        value=f"```properties\nTotal Members : {total_members}\n```",
         inline=False
     )
 
     view = discord.ui.View()
     view.add_item(discord.ui.Button(label="⚡ התחברות מהירה לעיר", url=f"https://cfx.re{CFX_CODE}", style=discord.ButtonStyle.link))
     if guild.icon: embed.set_thumbnail(url=guild.icon.url)
-    embed.set_footer(text="🔄 Chicago City System Auto-Update")
+    embed.set_footer(text="Chicago City Network")
     embed.timestamp = discord.utils.utcnow()
 
-    # שליחה/עריכה מיידית וחסינת תקלות בחדר
+    # מנגנון שליחה/עריכה אוטומטי ללא פקודות
     try:
-        target_message = None
-        async for msg in channel.history(limit=5):
-            if msg.author == bot.user and msg.embeds:
-                target_message = msg
-                break
+        if status_message is None:
+            async for msg in channel.history(limit=5):
+                if msg.author == bot.user and msg.embeds:
+                    status_message = msg
+                    break
         
-        if target_message:
-            await target_message.edit(embed=embed, view=view)
+        if status_message:
+            await status_message.edit(embed=embed, view=view)
         else:
-            await channel.send(embed=embed, view=view)
+            status_message = await channel.send(embed=embed, view=view)
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"[Discord Error] {e}")
 
 @bot.event
 async def on_ready():
-    print(f"Logged in as {bot.user.name}")
-    if not update_fivem_status.is_running():
-        update_fivem_status.start()
+    print(f"Bot is ready: {bot.user.name}")
+    if not update_status.is_running():
+        update_status.start()
 # מאגר נתונים זמני בזיכרון עבור אזהרות
 warnings_db = {}
 
@@ -264,9 +263,9 @@ async def on_connect():
     bot.add_view(TicketOpenView())
     bot.add_view(TicketControlView())
 
-# --- הרצת השרת והבוט ---
+# --- הרצת הבוט ---
 if __name__ == "__main__":
-    keep_alive()  
+    keep_alive()  # הפעלת שרת ה-Flask לטובת Render
     
     token = os.getenv("DISCORD_TOKEN")
     if not token:
