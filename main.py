@@ -6,15 +6,16 @@ from threading import Thread
 import discord
 from discord.ext import tasks, commands
 
-# אתחול שרת Flask מותאם 100% לדרישות של Render למניעת כיבוי הבוט
+# ========================================================
+# 1. שרת FLASK עבור RENDER (שמירה על הבוט באוויר 24/7)
+# ========================================================
 app = Flask('')
 
 @app.route('/')
 def home():
-    return "Chicago City Bot is Active 24/7!"
+    return "Chicago City Live Network Panel is Online!"
 
 def run_flask():
-    # Render מחייבת שימוש בפורט הדינמי או פורט 10000 כברירת מחדל
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
 
@@ -23,11 +24,12 @@ def keep_alive():
     t.daemon = True
     t.start()
 
-# נתונים קבועים ומדויקים של שרת שיקגו סיטי
-SERVER_NAME = "Chicago City"
+# ========================================================
+# 2. נתונים קבועים והגדרות בסיס של שיקגו סיטי
+# ========================================================
+SERVER_NAME = "Chicago City Roleplay"
 CFX_CODE = "rmadb7p"
-SERVER_IP = "135.148.36.192"
-SERVER_PORT = "30125"
+SERVER_IP = "135.148.36.192:30125"
 GUILD_ID = 1483039214793789483
 STATUS_CHANNEL_ID = 1506965475270332476
 VERIFY_ROLE_ID = 1483039214793789489
@@ -40,24 +42,40 @@ intents.members = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 status_message = None
 
-# פונקציה מרכזית לעדכון הסטטוס והחדר במקביל
-async def perform_status_update():
+# מאגר נתונים זמני בזיכרון עבור אזהרות
+warnings_db = {}
+
+# מערכת פקודות מובנית שעובדת במקביל ל-on_ready
+@bot.event
+async def on_message(message):
+    if message.author.bot:
+        return
+    await bot.process_commands(message)
+
+# ========================================================
+# 3. לולאת מערכת הסטטוס האוטומטית (העיצוב היוקרתי שלי)
+# ========================================================
+@tasks.loop(seconds=60)
+async def update_status_system():
     global status_message
+    await bot.wait_until_ready()
+    
     guild = bot.get_guild(GUILD_ID)
     channel = bot.get_channel(STATUS_CHANNEL_ID)
 
     if not guild or not channel:
-        print("[ERROR] Guild or Channel missing.")
         return
 
+    # נתוני דיסקורד
     total_members = guild.member_count
+
+    # ערכי ברירת מחדל למצב אופליין/טעינה
     clients = 0
     max_clients = 32
-    status_text = "🟢 פעיל (Online)"
-    embed_color = discord.Color.green()
-    server_online = False
+    status_text = "🟢 ONLINE"
+    embed_color = 0x2ecc71  # ירוק יוקרתי
 
-    # פנייה ל-API הציבורי של FiveM
+    # קריאת נתוני FiveM רשמית מהפורטל העולמי (חסין חסימות)
     url = f"https://fivem.net{CFX_CODE}"
     headers = {"User-Agent": "Mozilla/5.0"}
     
@@ -70,46 +88,48 @@ async def perform_status_update():
                     if server_data:
                         clients = server_data.get('clients', 0)
                         max_clients = server_data.get('sv_maxclients', 32)
-                        server_online = True
                 else:
-                    status_text = "🔴 מנותק / תחזוקה"
-                    embed_color = discord.Color.red()
+                    status_text = "🟠 MAINTENANCE"
+                    embed_color = 0xe67e22  # כתום
     except:
-        status_text = "🔴 מנותק / שגיאת API"
-        embed_color = discord.Color.red()
+        status_text = "🔴 OFFLINE"
+        embed_color = 0xe74c3c  # אדום
 
-    # 1. עדכון הסטטוס המשחקי בפרופיל (Watching)
-    if server_online:
-        activity_text = f"FiveM | {clients}/{max_clients}"
-    else:
-        activity_text = "FiveM | Offline ❌"
-        
-    await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name=activity_text))
-
-    # 2. בניית הודעת ה-Embed המעוצבת
+    # בניית ה-Embed בעיצוב היוקרתי והנקי
     embed = discord.Embed(
         title=f"📊 סטטוס רשת | {SERVER_NAME}",
-        description="הנתונים של שרת המשחק והדיסקורד מסונכרנים ומתעדכנים כל דקה.",
+        description="ברוכים הבאים ללוח הבקרה הרשמי של הקהילה. הנתונים הבאים מסונכרנים בזמן אמת ומספקים מידע מדויק על מצב הרשת והשרתים שלנו.\n\n"
+                    f"**🔗 קישור ישיר להתחברות:**\n`cfx.re/join/{CFX_CODE}`\n",
         color=embed_color
     )
+    
+    # מידע שרת המשחק בעיצוב קוביות נקי
     embed.add_field(
-        name="🎮 שרת המשחק (FiveM)",
-        value=f"```properties\nStatus   : {status_text}\nPlayers  : {clients}/{max_clients}\nServer IP: {SERVER_IP}:{SERVER_PORT}\n```",
+        name="🎮 שרת ה-FiveM",
+        value=f"```⚡ מצב שרת : {status_text}\n"
+              f"👥 שחקנים   : {clients} / {max_clients}\n"
+              f"🌐 כתובת IP : {SERVER_IP}```",
         inline=False
     )
+    
+    # מידע הדיסקורד
     embed.add_field(
-        name="👥 שרת הדיסקורד (Discord)",
-        value=f"```properties\nTotal Members : {total_members}\n```",
+        name="💬 קהילת הדיסקורד",
+        value=f"```👥 סך הכל חברים בשרת: {total_members} משתמשים```",
         inline=False
     )
 
+    # הוספת כפתור חיבור מעוצב מתחת להודעה
     view = discord.ui.View()
-    view.add_item(discord.ui.Button(label="⚡ התחברות מהירה לעיר", url=f"https://cfx.re{CFX_CODE}", style=discord.ButtonStyle.link))
-    if guild.icon: embed.set_thumbnail(url=guild.icon.url)
-    embed.set_footer(text="Chicago City Network • Auto Sync")
+    view.add_item(discord.ui.Button(label="🚀 התחברות מהירה לעיר", url=f"https://cfx.re{CFX_CODE}", style=discord.ButtonStyle.link))
+    
+    if guild.icon: 
+        embed.set_thumbnail(url=guild.icon.url)
+        
+    embed.set_footer(text="🔄 המערכת מתעדכנת אוטומטית בכל 60 שניות • Chicago City")
     embed.timestamp = discord.utils.utcnow()
 
-    # 3. מנגנון עריכה/שליחה מיידי לתוך החדר
+    # מנגנון שליחה ועריכה אוטומטי חסין תקלות (מנקה ומקבע את החדר)
     try:
         if status_message is None:
             async for msg in channel.history(limit=5):
@@ -122,32 +142,10 @@ async def perform_status_update():
         else:
             status_message = await channel.send(embed=embed, view=view)
     except Exception as e:
-        print(f"[Discord Error] {e}")
-
-# לולאת רענון קבועה כל 60 שניות
-@tasks.loop(seconds=60)
-async def update_status_loop():
-    await perform_status_update()
-
-@bot.event
-async def on_ready():
-    print(f"Bot is fully synchronized: {bot.user.name}")
-    # אילוץ ריצה ראשונית מיידית בשנייה שהבוט נדלק!
-    await perform_status_update()
-    # הפעלת הלולאה המחזורית ברקע
-    if not update_status_loop.is_running():
-        update_fivem_status_loop = update_status_loop.start()
-# מאגר נתונים זמני בזיכרון עבור אזהרות
-warnings_db = {}
-
-# מערכת פקודות מובנית שעובדת במקביל ל-on_ready
-@bot.event
-async def on_message(message):
-    if message.author.bot:
-        return
-    await bot.process_commands(message)
-
-# --- מערכת אימות (Verify Panel) ---
+        print(f"[Discord Embed Sync Error] {e}")
+# ========================================================
+# 4. מערכת אימות (Verify Panel)
+# ========================================================
 class VerifyView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -164,7 +162,9 @@ class VerifyView(discord.ui.View):
             await interaction.user.add_roles(role)
             await interaction.response.send_message("Successfully verified! Welcome to Chicago City.", ephemeral=True)
 
-# --- מערכת טיקטים (Ticket System) ---
+# ========================================================
+# 5. מערכת טיקטים (Ticket System)
+# ========================================================
 class TicketControlView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -204,7 +204,9 @@ class TicketOpenView(discord.ui.View):
         await channel.send(embed=embed, view=TicketControlView())
         await interaction.response.send_message(f"Ticket created: {channel.mention}", ephemeral=True)
 
-# --- פקודות ניהול והקמה (Setup Commands) ---
+# ========================================================
+# 6. פקודות ניהול והקמה (Setup Commands)
+# ========================================================
 @bot.command()
 @commands.has_permissions(administrator=True)
 async def setup_verify(ctx):
@@ -278,7 +280,15 @@ async def on_connect():
     bot.add_view(TicketOpenView())
     bot.add_view(TicketControlView())
 
-# --- הרצת השרת והבוט ---
+@bot.event
+async def on_ready():
+    print(f"Server Monitor successfully authorized as {bot.user.name}")
+    if not update_status_system.is_running():
+        update_status_system.start()
+
+# ========================================================
+# 7. הרצת הבוט והשרת הפנימי
+# ========================================================
 if __name__ == "__main__":
     keep_alive()  # הפעלת שרת ה-Flask לטובת Render
     
