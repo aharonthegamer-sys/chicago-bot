@@ -21,9 +21,9 @@ def keep_alive():
     t.daemon = True
     t.start()
 
-# נתונים קבועים של שיקגו סיטי
+# נתונים קבועים של שיקגו סיטי (מעודכן ל-IP הפיזי של השרת)
 SERVER_NAME = "Chicago City"
-CFX_CODE = "rmadb7p"
+SERVER_IP = "135.148.36.192:30125"
 VERIFY_ROLE_ID = 1483039214793789489
 STATUS_CHANNEL_ID = 1506965475270332476
 
@@ -40,18 +40,17 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 @tasks.loop(seconds=60)
 async def update_fivem_status():
     await bot.wait_until_ready()
-    url = f"https://fivem.net{CFX_CODE}"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    }
+    
+    # פנייה ישירה ל-IP של השרת כדי לעקוף את החסימות של FiveM API
+    url = f"http://{SERVER_IP}/dynamic.json"
     
     async with aiohttp.ClientSession() as session:
         try:
-            async with session.get(url, headers=headers, timeout=10) as response:
+            async with session.get(url, timeout=10) as response:
                 if response.status == 200:
                     data = await response.json()
-                    clients = data.get('Data', {}).get('clients', 0)
-                    max_clients = data.get('Data', {}).get('sv_maxclients', 128)
+                    clients = data.get('clients', 0)
+                    max_clients = data.get('sv_maxclients', 128)
                     
                     # עדכון סטטוס צפייה (Watching)
                     activity = discord.Activity(
@@ -65,21 +64,27 @@ async def update_fivem_status():
                     if channel:
                         await channel.edit(name=f"🎮 Players: {clients}/{max_clients}")
                 else:
-                    # במקרה של שגיאה מה-API של FiveM
+                    # הגנה במקרה שהשרת מחזיר שגיאה
                     activity = discord.Activity(
                         type=discord.ActivityType.watching, 
-                        name="Chicago City | Offline"
+                        name="Chicago City | Server Offline"
                     )
                     await bot.change_presence(activity=activity)
         except Exception as e:
-            print(f"Error fetching FiveM status: {e}")
+            print(f"Error fetching FiveM status directly from IP: {e}")
+            # עדכון לסטטוס אופליין אם השרת מכובה לגמרי
+            activity = discord.Activity(
+                type=discord.ActivityType.watching, 
+                name="Chicago City | Offline ❌"
+            )
+            await bot.change_presence(activity=activity)
 
 @bot.event
 async def on_ready():
     print(f"Logged in as {bot.user.name} ({bot.user.id})")
     if not update_fivem_status.is_running():
         update_fivem_status.start()
-# מאגר נתונים זמני בזיכרון עבור אזהרות (בסביבתפרודקשן מומלץ להחליף ב-DB)
+# מאגר נתונים זמני בזיכרון עבור אזהרות
 warnings_db = {}
 
 # --- מערכת אימות (Verify Panel) ---
@@ -119,7 +124,6 @@ class TicketOpenView(discord.ui.View):
         guild = interaction.guild
         ticket_name = f"ticket-{interaction.user.name}".lower()
         
-        # בדיקה אם קיים כבר חדר כזה
         existing_channel = discord.utils.get(guild.channels, name=ticket_name)
         if existing_channel:
             return await interaction.response.send_message(f"You already have an open ticket: {existing_channel.mention}", ephemeral=True)
