@@ -104,7 +104,7 @@ class TicketControls(View):
         try:
             msg = await bot.wait_for('message', check=check, timeout=30)
             if msg.mentions:
-                target = msg.mentions[0]
+                target = msg.mentions
                 await interaction.channel.set_permissions(target, read_messages=True, send_messages=True)
                 await interaction.channel.send(f"🎉 **המערכת הכניסה בהצלחה את** {target.mention} **לתוך חדר התמיכה!** ✅")
             else: await interaction.channel.send("❌ שגיאה: לא תייגת משתמש תקין.")
@@ -138,9 +138,9 @@ class TicketDropdown(Select):
         await interaction.followup.send(f"🎉 הטיקט שלך נוצר בהצלחה! לחץ כאן כדי להיכנס אליו: {ticket_channel.mention}", ephemeral=True)
         
         log_ch = bot.get_channel(CHANNEL_TICKET_LOGS)
-        if log_ch: await log_ch.send(embed=discord.Embed(title="➕ טיקט חדש נפתח בשרת!", description=f"🔹 **פותח הפנייה:** {interaction.user.mention}\n🔹 **נושא הטיקט:** `{self.values[0]}`\n🔹 **חדר:** {ticket_channel.mention}", color=discord.Color.green()))
+        if log_ch: await log_ch.send(embed=discord.Embed(title="➕ טיקט חדש נפתח בשרת!", description=f"🔹 **פותח הפנייה:** {interaction.user.mention}\n🔹 **נושא הטיקט:** `{self.values}`\n🔹 **חדר:** {ticket_channel.mention}", color=discord.Color.green()))
             
-        embed = discord.Embed(title="🎫 מרכז הפניות והתמיכה ➔ CHICAGO CITY 💎", description=f"שלום {interaction.user.mention}! 🎉\n\nפנייתך בנושא המוגדר כמפורט: `{self.values[0]}` נפתחה בהצלחה רבה.\n\n**אנא רשום כאן בצ'אט את כל פירוט המקרה שלך בצורה ברורה ביותר**, ואנשי צוות השרת יגיעו לסייע לך בתוך דקות ספורות! 🚀✨", color=discord.Color.from_rgb(142, 68, 173))
+        embed = discord.Embed(title="🎫 מרכז הפניות והתמיכה ➔ CHICAGO CITY 💎", description=f"שלום {interaction.user.mention}! 🎉\n\nפנייתך בנושא המוגדר כמפורט: `{self.values}` נפתחה בהצלחה רבה.\n\n**אנא רשום כאן בצ'אט את כל פירוט המקרה שלך בצורה ברורה ביותר**, ואנשי צוות השרת יגיעו לסייע לך בתוך דקות ספורות! 🚀✨", color=discord.Color.from_rgb(142, 68, 173))
         embed.set_footer(text="Chicago City • Support System Desk")
         await ticket_channel.send(embed=embed, view=TicketControls())
         p = await ticket_channel.send(f"<@&{ROLE_STAFF}>"); await p.delete()
