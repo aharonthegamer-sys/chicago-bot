@@ -9,7 +9,7 @@ app = Flask('')
 
 @app.route('/')
 def home():
-    return "Chicago City Center is Active!"
+    return "Chicago City Premium Core Operational"
 
 def run_flask():
     port = int(os.environ.get("PORT", 10000))
@@ -71,7 +71,8 @@ async def update_discord_radar():
 
     embed = discord.Embed(
         title=f"⚫ {SERVER_NAME.upper()} | LIVE STATS",
-        description="ברוכים הבאים ללוח המידע המרכזי של הרשת.\nהנתונים המוצגים מטה מסונכרנים ישירות מול ה-API של דיסקורד.\n\n**─── קהילה ותשתית ───**",
+        description="ברוכים הבאים ללוח המידע המרכזי של הרשת.\nהנתונים המוצגים מטה מסונכרנים ישירות מול ה-API של דיסקורד.\n\n"
+                    "**─── קהילה ותשתית ───**",
         color=0x010101 
     )
     
@@ -89,7 +90,9 @@ async def update_discord_radar():
 
     embed.add_field(
         name="💎 שיפורי שרת (Boosts)",
-        value=f"```⚙️ סך הכל בוסטים: {boost_count} Boosts\n⭐ רמת בוסט שרת: Level {boost_level}\n🔒 הגנת אנטי-רייד: Active```",
+        value=f"```⚙️ סך הכל בוסטים: {boost_count} Boosts\n"
+              f"⭐ רמת בוסט שרת: Level {boost_level}\n"
+              f"🔒 הגנת אנטי-רייד: Active```",
         inline=False
     )
 
@@ -114,8 +117,8 @@ async def update_discord_radar():
             await status_message.edit(embed=embed, view=view)
         else:
             status_message = await channel.send(embed=embed, view=view)
-    except:
-        pass
+    except Exception as e:
+        print(f"[Log Status System] Error: {e}")
 
 
 class VerifyView(discord.ui.View):
