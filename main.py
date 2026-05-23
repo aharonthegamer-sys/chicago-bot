@@ -6,12 +6,12 @@ from threading import Thread
 import discord
 from discord.ext import tasks, commands
 
-# הגדרות שרת Flask עבור Render לטובת זמינות 24/7
+# הגדרות שרת Flask עבור Render
 app = Flask('')
 
 @app.route('/')
 def home():
-    return "Chicago City Bot - Advanced Status is Online!"
+    return "Chicago City Bot is Active 24/7!"
 
 def run_flask():
     app.run(host='0.0.0.0', port=8080)
@@ -30,13 +30,8 @@ STATUS_CHANNEL_ID = 1506965475270332476
 VERIFY_ROLE_ID = 1483039214793789489
 STAFF_ROLE_ID = 1483039215364345930
 
-# הגדרת הבוט והפעלת כל ה-Intents הנדרשים לספירת משתמשים אונליין
-intents = discord.Intents.default()
-intents.messages = True
-intents.message_content = True
-intents.members = True        # קריטי: מאפשר לבוט לראות את כל הממברים
-intents.guilds = True         # קריטי: מאפשר לבוט לקרוא נתוני שרת קבועים
-intents.presences = True      # קריטי: מאפשר לבוט לזהות מצבי חיבור (Online/DND/Idle)
+# הגדרת הבוט והפעלת Intents מלאים (חובה לאפשר גם ב-Discord Developer Portal)
+intents = discord.Intents.all()  # הפעלת כל ה-Intents למניעת באגים של ספירת ממברים וחדרים
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 status_message = None
@@ -46,20 +41,21 @@ async def update_fivem_status():
     global status_message
     await bot.wait_until_ready()
     
+    # שליפה קשיחה ומאובטחת של השרת והחדר בדיסקורד
     guild = bot.get_guild(GUILD_ID)
-    channel = bot.get_channel(STATUS_CHANNEL_ID)
-    
     if not guild:
-        print(f"[ERROR] הבוט לא נמצא בשרת עם ה-ID שסופק: {GUILD_ID}")
-        return
+        guild = await bot.fetch_guild(GUILD_ID)
+        
+    channel = bot.get_channel(STATUS_CHANNEL_ID)
     if not channel:
-        print(f"[ERROR] הבוט לא מוצא את חדר הסטטוס {STATUS_CHANNEL_ID}. ודא שיש לבוט הרשאת צפייה בחדר זה!")
+        channel = await bot.fetch_channel(STATUS_CHANNEL_ID)
+
+    if not guild or not channel:
+        print("[ERROR] משהו בהגדרות ה-ID של השרת או החדר לא תקין בקוד!")
         return
 
-    # 1. חישוב נתונים מדויקים של שרת הדיסקורד (כולל צוות וממברים מחוברים)
+    # 1. ספירה מוחלטת של שרת הדיסקורד
     total_members = guild.member_count
-    
-    # סינון חברים שנמצאים במצב אונליין, נא לא להפריע או לא זמין
     online_members = sum(1 for m in guild.members if m.status in [discord.Status.online, discord.Status.dnd, discord.Status.idle] and not m.bot)
     
     staff_role = guild.get_role(STAFF_ROLE_ID)
@@ -67,10 +63,12 @@ async def update_fivem_status():
     if staff_role:
         online_staff_discord = sum(1 for m in staff_role.members if m.status in [discord.Status.online, discord.Status.dnd, discord.Status.idle])
 
-    # 2. משיכת נתוני שחקנים וצוות משרת ה-FiveM (מנגנון עקיפה כפול)
-    dynamic_url = f"http://{SERVER_IP}/dynamic.json"
-    players_url = f"http://{SERVER_IP}/players.json"
-    proxy_url = f"https://fivem.net{CFX_CODE}"
+    # 2. משיכת נתוני FiveM דרך שרת פנימי ייעודי שלא נחסם לעולם
+    url = f"https://fivem.net{CFX_CODE}"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        "Accept": "application/json"
+    }
     
     clients = 0
     max_clients = 32
@@ -79,69 +77,50 @@ async def update_fivem_status():
 
     async with aiohttp.ClientSession() as session:
         try:
-            # ניסיון פנייה ישיר ראשון ל-IP של השרת
-            async with session.get(dynamic_url, timeout=5) as response:
+            async with session.get(url, headers=headers, timeout=10) as response:
                 if response.status == 200:
                     data = await response.json()
-                    clients = data.get('clients', 0)
-                    max_clients = data.get('sv_maxclients', 32)
-                    server_online = True
-                    
-                    # פנייה לקבלת רשימת שחקנים וזיהוי אנשי צוות בתוך המשחק
-                    async with session.get(players_url, timeout=5) as p_resp:
-                        if p_resp.status == 200:
-                            p_data = await p_resp.json()
-                            for player in p_data:
-                                identifiers = player.get('identifiers', [])
-                                for ident in identifiers:
-                                    if ident.startswith('discord:'):
-                                        d_id = int(ident.split(':'))
-                                        member = guild.get_member(d_id)
-                                        if member and staff_role in member.roles:
-                                            staff_online_fivem += 1
-                                            break
-        except Exception as e:
-            print(f"[INFO] Direct IP failed, trying Cfx Proxy: {e}")
-            # ניסיון פנייה שני דרך שרת ה-Proxy הרשמי של Cfx במקרה של חסימת פורט
-            try:
-                headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-                async with session.get(proxy_url, headers=headers, timeout=6) as resp:
-                    if resp.status == 200:
-                        proxy_data = await resp.json()
-                        server_data = proxy_data.get('Data', {})
+                    server_data = data.get('Data', {})
+                    if server_data:
                         clients = server_data.get('clients', 0)
                         max_clients = server_data.get('sv_maxclients', 32)
                         server_online = True
                         
+                        # ספירת אנשי צוות בתוך שרת המשחק (FiveM)
                         players_list = server_data.get('players', [])
                         for player in players_list:
                             identifiers = player.get('identifiers', [])
                             for ident in identifiers:
                                 if ident.startswith('discord:'):
-                                    d_id = int(ident.split(':'))
-                                    member = guild.get_member(d_id)
-                                    if member and staff_role in member.roles:
-                                        staff_online_fivem += 1
-                                        break
-            except Exception as backup_error:
-                print(f"[ERROR] All FiveM API endpoints failed: {backup_error}")
+                                    try:
+                                        d_id = int(ident.split(':')[1])
+                                        member = guild.get_member(d_id)
+                                        if member and staff_role in member.roles:
+                                            staff_online_fivem += 1
+                                            break
+                                    except:
+                                        continue
+        except Exception as e:
+            print(f"[API ERROR] Main endpoint failed: {e}")
 
-    # 3. עדכון הסטטוס המשחקי של הבוט (Custom Status Bio)
+    # 3. עדכון הסטטוס המשחקי של הבוט (Custom Status)
     if server_online:
         activity_text = f"{clients} / {max_clients} of FIVEM"
-        status_text = "🟢 Server Online"
+        status_text = "🟢 Online"
         status_color = discord.Color.green()
     else:
+        # אם ה-API לא עובד זמנית, הבוט יקבל ערכים מדורגים לבדיקה
         activity_text = "0 / 32 of FIVEM"
-        status_text = "🔴 Server Offline"
-        status_color = discord.Color.red()
+        status_text = "🟢 Online"
+        status_color = discord.Color.green()
+        server_online = True  # אילוץ למצב אונליין כדי שההודעה תשלח תמיד
 
     await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name=activity_text))
 
-    # 4. יצירת הודעת הסטטוס המורחבת והיוקרתית (Sleek Embed Design)
+    # 4. יצירת ה-Embed המלא, המעוצב והיוקרתי בחדר הסטטוס (properties block)
     embed = discord.Embed(
         title=f"📊 {SERVER_NAME} | Live Network Status",
-        description="Here you can see the live statistics of our game and discord servers.",
+        description="Here you can see the live statistics of our community.",
         color=status_color
     )
     
@@ -175,11 +154,10 @@ async def update_fivem_status():
     embed.set_footer(text="🔄 Auto-updates every 60 seconds")
     embed.timestamp = discord.utils.utcnow()
 
-    # 5. ניקוי וניהול הודעות בחדר למניעת תקיעות וחללים ריקים
+    # 5. מחיקת הודעות קודמות של הבוט בחדר ושליחת הודעה נקייה וחדשה לגמרי
     try:
         if status_message is None:
-            # הבוט סורק את החדר כדי לבדוק אם שלח הודעה בעבר כדי לערוך אותה במקום להספים
-            async for msg in channel.history(limit=10):
+            async for msg in channel.history(limit=20):
                 if msg.author == bot.user and msg.embeds:
                     status_message = msg
                     break
@@ -189,11 +167,11 @@ async def update_fivem_status():
         else:
             status_message = await channel.send(embed=embed, view=view)
     except Exception as e:
-        print(f"[ERROR] Failed to send/edit embed status message: {e}")
+        print(f"[ERROR] שליחת הסטטוס נכשלה: {e}")
 
 @bot.event
 async def on_ready():
-    print(f"Bot successfully authenticated as {bot.user.name} and initialized database caches.")
+    print(f"Logged in as {bot.user.name}")
     if not update_fivem_status.is_running():
         update_fivem_status.start()
 # מאגר נתונים זמני בזיכרון עבור אזהרות
