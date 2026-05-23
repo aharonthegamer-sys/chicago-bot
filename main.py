@@ -24,8 +24,10 @@ def keep_alive():
 # נתונים קבועים של שיקגו סיטי
 SERVER_NAME = "Chicago City"
 CFX_CODE = "rmadb7p"
+SERVER_IP = "135.148.36.192:30125"
 VERIFY_ROLE_ID = 1483039214793789489
 STATUS_CHANNEL_ID = 1506965475270332476
+STAFF_ROLE_ID = 1483039215364345930  # רול הצוות המעודכן שלכם
 
 # הגדרת הבוט ו-Intents
 intents = discord.Intents.default()
@@ -33,7 +35,7 @@ intents.messages = True
 intents.message_content = True
 intents.members = True
 intents.guilds = True
-intents.presences = True  # נדרש כדי לחשב חברים אונליין בדיסקורד
+intents.presences = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 status_message = None
@@ -48,66 +50,104 @@ async def update_fivem_status():
         return
     guild = channel.guild
 
-    # 1. חישוב מדויק של חברי שרת הדיסקורד
+    # 1. נתוני שרת הדיסקורד וצוות בדיסקורד
     total_members = guild.member_count
     online_members = sum(1 for m in guild.members if m.status in [discord.Status.online, discord.Status.dnd, discord.Status.idle])
+    
+    staff_role = guild.get_role(STAFF_ROLE_ID)
+    online_staff_discord = 0
+    if staff_role:
+        online_staff_discord = sum(1 for m in staff_role.members if m.status in [discord.Status.online, discord.Status.dnd, discord.Status.idle])
 
-    # 2. פנייה ל-API הרשמי של FiveM עם הדמיית דפדפן מלאה למניעת חסימות
-    url = f"https://fivem.net{CFX_CODE}"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "application/json"
-    }
+    # 2. קריאת נתוני שחקנים וצוות בתוך ה-FiveM
+    players_url = f"http://{SERVER_IP}/players.json"
+    dynamic_url = f"http://{SERVER_IP}/dynamic.json"
     
     clients = 0
     max_clients = 128
+    staff_online_fivem = 0
     server_online = False
 
     async with aiohttp.ClientSession() as session:
         try:
-            async with session.get(url, headers=headers, timeout=10) as response:
+            # משיכת כמות שחקנים כללית
+            async with session.get(dynamic_url, timeout=7) as response:
                 if response.status == 200:
-                    data = await response.json()
-                    clients = data.get('Data', {}).get('clients', 0)
-                    max_clients = data.get('Data', {}).get('sv_maxclients', 128)
+                    dynamic_data = await response.json()
+                    clients = dynamic_data.get('clients', 0)
+                    max_clients = dynamic_data.get('sv_maxclients', 128)
                     server_online = True
+            
+            # משיכת רשימת שחקנים לספירת אנשי צוות בתוך המשחק
+            if server_online and staff_role:
+                async with session.get(players_url, timeout=7) as response:
+                    if response.status == 200:
+                        players_data = await response.json()
+                        for player in players_data:
+                            identifiers = player.get('identifiers', [])
+                            for ident in identifiers:
+                                if ident.startswith('discord:'):
+                                    discord_id = int(ident.split(':')[1])
+                                    member = guild.get_member(discord_id)
+                                    if member and staff_role in member.roles:
+                                        staff_online_fivem += 1
+                                        break
         except Exception as e:
-            print(f"FiveM API fetch error: {e}")
+            print(f"FiveM Fetch Error: {e}")
 
-    # 3. עדכון הביו/סטטוס של הבוט (Custom Status - Watching)
+    # 3. עדכון הביו של הבוט (Watching 0 / 32 of FIVEM)
     if server_online:
-        activity_text = f"Chicago City | 🎮 {clients}/{max_clients}"
+        activity_text = f"{clients} / {max_clients} of FIVEM"
+        status_text = "🟢 Online"
+        status_color = discord.Color.green()
     else:
-        activity_text = "Chicago City | Server Offline ❌"
-        
+        activity_text = "0 / 32 of FIVEM | Offline"
+        status_text = "🔴 Offline"
+        status_color = discord.Color.red()
+
     await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name=activity_text))
 
-    # 4. יצירת הודעת הסטטוס המקצועית בחדר
+    # 4. בניית ה-Embed המושקע בסגנון המקצועי
     embed = discord.Embed(
         title=f"📊 {SERVER_NAME} | Live Status",
-        color=discord.Color.green() if server_online else discord.Color.red()
+        description="Here you can see the live statistics of our servers.",
+        color=status_color
     )
     
-    if server_online:
-        embed.description = "🟢 השרת פעיל כעת! ניתן להתחבר כרגיל."
-        embed.add_field(name="🎮 FiveM Players", value=f"```🎮 {clients} / {max_clients} שחקנים מחוברים```", inline=False)
-    else:
-        embed.description = "🔴 השרת לא זמין כעת. מבוצעות עבודות תחזוקה או עדכון."
-        embed.add_field(name="🎮 FiveM Players", value="```🔴 שרת המשחק באופליין```", inline=False)
-
-    embed.add_field(name="💬 Discord Members", value=f"```👥 סה\"כ ממברים: {total_members}\n🟢 מחוברים כעת: {online_members}```", inline=False)
+    embed.add_field(
+        name="🎮 FiveM Server Stats",
+        value=f"```properties\n"
+              f"Status: {status_text}\n"
+              f"Players: {clients}/{max_clients}\n"
+              f"Staff In-Game: {staff_online_fivem}\n"
+              f"IP Address: {SERVER_IP}\n"
+              f"```",
+        inline=False
+    )
     
-    # הוספת כפתור חיבור מהיר לשרת
-    view = discord.ui.View()
-    view.add_item(discord.ui.Button(label="Connect to FiveM", url=f"https://cfx.re{CFX_CODE}", style=discord.ButtonStyle.link))
+    embed.add_field(
+        name="👥 Discord Server Stats",
+        value=f"```properties\n"
+              f"Total Members: {total_members}\n"
+              f"Online Members: {online_members}\n"
+              f"Staff Online: {online_staff_discord}\n"
+              f"```",
+        inline=False
+    )
 
-    embed.set_footer(text="עודכן לאחרונה")
+    view = discord.ui.View()
+    view.add_item(discord.ui.Button(label="⚡ Connect to Server", url=f"https://cfx.re{CFX_CODE}", style=discord.ButtonStyle.link))
+
+    if guild.icon:
+        embed.set_thumbnail(url=guild.icon.url)
+        
+    embed.set_footer(text="🔄 Auto-updates every 60 seconds")
     embed.timestamp = discord.utils.utcnow()
 
-    # 5. בדיקה ומניעת כפילויות הודעות בחדר הסטטוס
+    # 5. מניעת כפילויות הודעות בחדר
     try:
         if status_message is None:
-            async for msg in channel.history(limit=15):
+            async for msg in channel.history(limit=10):
                 if msg.author == bot.user and msg.embeds:
                     status_message = msg
                     break
@@ -117,7 +157,7 @@ async def update_fivem_status():
         else:
             status_message = await channel.send(embed=embed, view=view)
     except Exception as e:
-        print(f"Error handling live embed message: {e}")
+        print(f"Error updating embed: {e}")
 
 @bot.event
 async def on_ready():
