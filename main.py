@@ -6,15 +6,17 @@ from threading import Thread
 import discord
 from discord.ext import tasks, commands
 
-# הגדרות שרת Flask עבור Render למניעת קריסות (Port Binding)
+# הגדרות שרת Flask מותאמות באופן מושלם לפורט הדינמי של Render
 app = Flask('')
 
 @app.route('/')
 def home():
-    return "Chicago City Bot - Status System is Online!"
+    return "Chicago City Bot - Advanced Status is Online!"
 
 def run_flask():
-    app.run(host='0.0.0.0', port=8080)
+    # משיכת הפורט הדינמי ש-Render מקצה, או שימוש ב-8080 כברירת מחדל
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host='0.0.0.0', port=port)
 
 def keep_alive():
     t = Thread(target=run_flask)
@@ -27,9 +29,10 @@ CFX_CODE = "rmadb7p"
 SERVER_IP = "135.148.36.192:30125"
 GUILD_ID = 1483039214793789483
 STATUS_CHANNEL_ID = 1506965475270332476
+VERIFY_ROLE_ID = 1483039214793789489
 STAFF_ROLE_ID = 1483039215364345930
 
-# הגדרת ה-Intents בצורה המדויקת והמפורשת ביותר
+# הגדרת ה-Intents בצורה הבטוחה ביותר למניעת חסימות
 intents = discord.Intents.default()
 intents.messages = True
 intents.message_content = True
@@ -164,7 +167,7 @@ class VerifyView(discord.ui.View):
 
     @discord.ui.button(label="Verify Me", style=discord.ButtonStyle.green, custom_id="verify_btn")
     async def verify_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        role = interaction.guild.get_role(1483039214793789489)  # רול אימות קבוע שלכם
+        role = interaction.guild.get_role(VERIFY_ROLE_ID)
         if not role:
             return await interaction.response.send_message("Verify role not found!", ephemeral=True)
         
@@ -290,7 +293,7 @@ async def on_connect():
 
 # --- הרצת השרת והבוט ---
 if __name__ == "__main__":
-    keep_alive()  # הפעלת שרת ה-Flask לפתרון שגיאת הפורטים ב-Render
+    keep_alive()  # הפעלת שרת ה-Flask לטובת Render
     
     token = os.getenv("DISCORD_TOKEN")
     if not token:
