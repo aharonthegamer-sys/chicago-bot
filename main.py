@@ -205,7 +205,6 @@ class TicketControlView(discord.ui.View):
     # כפתור לקיחת טיפול (Claim)
     @discord.ui.button(label="🙋‍♂️ קח טיפול (Claim)", style=discord.ButtonStyle.success, custom_id="btn_claim_t")
     async def claim_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # בדיקה האם המשתמש שלחץ הוא איש צוות
         staff_role = interaction.guild.get_role(STAFF_ROLE_ID)
         if staff_role not in interaction.user.roles and not interaction.user.guild_permissions.administrator:
             return await interaction.response.send_message("❌ רק אנשי צוות יכולים לקחת טיפול על פניות!", ephemeral=True)
@@ -251,10 +250,9 @@ class TicketDropdown(discord.ui.Select):
         super().__init__(placeholder="🔽 בחר את קטגוריית הפנייה שלך...", min_values=1, max_values=1, options=options, custom_id="ticket_dropdown_select")
 
     async def callback(self, interaction: discord.Interaction):
-        category = self.values[0]
+        category = self.values
         guild = interaction.guild
         
-        # תרגום קטגוריות לשמות הערוצים
         category_titles = {
             "report": "🚨| דיווח שחקן-צוות",
             "bug": "🐛| דיווח על באג",
@@ -271,7 +269,6 @@ class TicketDropdown(discord.ui.Select):
 
         ticket_name = f"{ticket_prefix[category]}-{interaction.user.name}".lower()
         
-        # מניעת כפילויות של פתיחת חדרים
         existing_channel = discord.utils.get(guild.channels, name=ticket_name)
         if existing_channel:
             return await interaction.response.send_message(f"❌ כבר יש לך פנייה פתוחה במערכת: {existing_channel.mention}", ephemeral=True)
@@ -284,7 +281,6 @@ class TicketDropdown(discord.ui.Select):
 
         channel = await guild.create_text_channel(name=ticket_name, overwrites=overwrites)
         
-        # בניית ה-Embed הפנימי של הטיקט בעיצוב מומחה
         embed = discord.Embed(
             title=f"🎫 פנייה חדשה | קטגוריה: {category_titles[category]}",
             description=f"שלום רב {interaction.user.mention},\nצוות הניהול קיבל את פנייתך בנושא זה ויתפנה אליך בהקדם.\n\n"
@@ -299,7 +295,6 @@ class TicketDropdown(discord.ui.Select):
         await channel.send(embed=embed, view=TicketControlView())
         await interaction.response.send_message(f"✅ הפנייה שלך נוצרה בהצלחה בחדר: {channel.mention}", ephemeral=True)
 
-# תצוגת פאנל הטיקטים שמכילה את ה-Dropdown
 class TicketOpenView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -336,3 +331,11 @@ async def setup_tickets(ctx):
     if ctx.guild.icon:
         embed.set_thumbnail(url=ctx.guild.icon.url)
     embed.set_footer(text="Chicago City Support Center")
+    await ctx.send(embed=embed, view=TicketOpenView())
+
+# --- מערכת הצעות משודרגת ---
+@bot.command()
+async def suggest(ctx, *, suggestion: str):
+    await ctx.message.delete()
+    embed = discord.Embed(
+        title="💡 הצעה חדשה מהקהילה",
