@@ -104,7 +104,7 @@ class TicketControls(View):
         try:
             msg = await bot.wait_for('message', check=check, timeout=30)
             if msg.mentions:
-                target = msg.mentions[0]
+                target = msg.mentions
                 await interaction.channel.set_permissions(target, read_messages=True, send_messages=True)
                 await interaction.channel.send(f"🎉 **המערכת הכניסה בהצלחה את** {target.mention} **לתוך חדר התמיכה!** ✅")
             else: await interaction.channel.send("❌ שגיאה: לא תייגת משתמש תקין.")
@@ -235,7 +235,7 @@ async def setup_giveaway_panel(ctx):
     embed.set_footer(text="Chicago City Staff Console • Color Edition")
     await ctx.send(embed=embed, view=GiveawayPanelView())
 
-# --- פאנל אזהרות צבעוני מבוסס בחירת תיוג @ ישירה (WARN PANEL USER SELECT) ---
+# --- פאנל אזהרות ---
 class StaffSelectReasonModal(Modal):
     def __init__(self, target_member):
         super().__init__(title="🚨 הזנת סיבת אזהרה - משמעת")
@@ -254,14 +254,8 @@ class StaffSelectReasonModal(Modal):
         log_ch = bot.get_channel(CHANNEL_STAFF_WARNS_LOG)
         if log_ch:
             embed = discord.Embed(title="🚨 רישום משמעת חמור בצוות! ➔ CHICAGO CITY 💥", color=discord.Color.red())
-            embed.description = f"💥 **אזהרה רשמית נרשמה בתיק האישי של חבר צוות!** 💥\n\n" \
-                                f"👤 **חבר הצוות שנענש:** {self.target.mention}\n" \
-                                f"🛡️ **האדמין המעניש מההנהלה:** {interaction.user.mention}\n" \
-                                f"📅 **מועד ומילוי האירוע:** `{t}`\n\n" \
-                                f"📝 **סיבת האזהרה בתיק:**\n```fix\n{self.reason.value}```\n" \
-                                f"📊 **מצב תיק אזהרות עדכני:** `{'🟥' * count + '⬛' * (3 - count)}` ({count}/3 אזהרות)"
+            embed.description = f"💥 **אזהרה רשמית נרשמה בתיק האישי של חבר צוות!** 💥\n\n👤 **חבר הצוות שנענש:** {self.target.mention}\n🛡️ **האדמין המעניש מההנהלה:** {interaction.user.mention}\n📅 **מועד ומילוי האירוע:** `{t}`\n\n📝 **סיבת האזהרה בתיק:**\n```fix\n{self.reason.value}```\n📊 **מצב תיק אזהרות עדכני:** `{'🟥' * count + '⬛' * (3 - count)}` ({count}/3 אזהרות)"
             embed.set_thumbnail(url=self.target.display_avatar.url)
-            embed.set_footer(text="Chicago City Security Database System")
             await log_ch.send(embed=embed)
         await interaction.followup.send(f"✅ האזהרה נרשמה בהצלחה רבה ל-{self.target.mention} והלוג שודר לערוץ!", ephemeral=True)
 
@@ -271,7 +265,7 @@ class WarnUserSelect(UserSelect):
         self.action_type = action_type
 
     async def callback(self, interaction: discord.Interaction):
-        target = self.values
+        target = self.values[0]
         if self.action_type == "add":
             await interaction.response.send_modal(StaffSelectReasonModal(target))
         elif self.action_type == "view":
@@ -280,7 +274,6 @@ class WarnUserSelect(UserSelect):
             embed = discord.Embed(title=f"📊 גיליון אזהרות צוות רשמי ➔ {target.name} 🚨", color=discord.Color.orange())
             for i, w in enumerate(staff_warns_db[target.id], 1):
                 embed.add_field(name=f"🚨 אזהרה מספר {i} ➔ בתאריך {w['date']}", value=f"🔹 **רשם והעניש:** <@{w['by']}>\n🔹 **הסיבה הרשומה:** {w['reason']}", inline=False)
-            embed.set_footer(text="Chicago City Internal Records")
             await interaction.response.send_message(embed=embed, ephemeral=True)
         elif self.action_type == "remove":
             if target.id in staff_warns_db and len(staff_warns_db[target.id]) > 0:
@@ -295,3 +288,7 @@ class WarnPanelView(View):
         if interaction.guild.get_role(ROLE_WARN_ADMIN) not in interaction.user.roles and not interaction.user.guild_permissions.administrator:
             return await interaction.response.send_message("❌ אבטחה: מיועד לדרג ניהול עליון בלבד!", ephemeral=True)
         view = View().add_item(WarnUserSelect("add"))
+        await interaction.response.send_message("⚙️ **בחרו מתוך רשימת חברי הצוות מטה את המנהל שברצונכם להזהיר:**", view=view, ephemeral=True)
+
+    @discord.ui.button(label="📊 כמות ווארנים בתיק", style=discord.ButtonStyle.grey, custom_id="wp_view")
+    async def view_warn_btn(self, interaction: discord.Interaction, button: Button):
