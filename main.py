@@ -21,7 +21,7 @@ def keep_alive():
     t.daemon = True
     t.start()
 
-# נתונים קבועים ומדויקים של שיקגו סיטי (לפי הקישור והגדרות השרת)
+# נתונים קבועים ומדויקים של שיקגו סיטי
 SERVER_NAME = "Chicago City"
 CFX_CODE = "rmadb7p"
 GUILD_ID = 1483039214793789483
@@ -47,8 +47,12 @@ async def update_fivem_status():
     
     guild = bot.get_guild(GUILD_ID)
     channel = bot.get_channel(STATUS_CHANNEL_ID)
-    if not channel or not guild:
-        print(f"Error: Guild ({GUILD_ID}) or Channel ({STATUS_CHANNEL_ID}) not found.")
+    
+    if not guild:
+        print(f"[ERROR] Bot is not in guild with ID: {GUILD_ID}")
+        return
+    if not channel:
+        print(f"[ERROR] Bot cannot find channel with ID: {STATUS_CHANNEL_ID}. Check bot permissions!")
         return
 
     # 1. חישוב נתוני דיסקורד וצוות אונליין
@@ -60,14 +64,14 @@ async def update_fivem_status():
     if staff_role:
         online_staff_discord = sum(1 for m in staff_role.members if m.status in [discord.Status.online, discord.Status.dnd, discord.Status.idle])
 
-    # 2. משיכת נתוני FiveM משרת Proxy ציבורי (עוקף חסימות Cloudflare)
+    # 2. משיכת נתוני FiveM מנקודת הקצה הרשמית והחסינה של Cfx.re
     url = f"https://fivem.net{CFX_CODE}"
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
     }
     
     clients = 0
-    max_clients = 32 # ברירת מחדל כפי שביקשת בעיצוב
+    max_clients = 32
     staff_online_fivem = 0
     server_online = False
 
@@ -81,7 +85,7 @@ async def update_fivem_status():
                     max_clients = server_data.get('sv_maxclients', 32)
                     server_online = True
                     
-                    # ספירת אנשי צוות שנמצאים כרגע בתוך השרת
+                    # ספירת אנשי צוות בתוך המשחק
                     players_list = server_data.get('players', [])
                     for player in players_list:
                         identifiers = player.get('identifiers', [])
@@ -95,8 +99,10 @@ async def update_fivem_status():
                                         break
                                 except:
                                     continue
+                else:
+                    print(f"[WARNING] FiveM API returned status code: {response.status}")
         except Exception as e:
-            print(f"FiveM Proxy API Error: {e}")
+            print(f"[ERROR] Failed to fetch FiveM stats: {e}")
 
     # 3. עדכון סטטוס ה-Watching הדינמי בביו של הבוט
     if server_online:
@@ -104,15 +110,15 @@ async def update_fivem_status():
         status_text = "🟢 Online"
         status_color = discord.Color.green()
     else:
-        activity_text = "0 / 32 of FIVEM | Offline"
+        activity_text = f"0 / 32 of FIVEM"
         status_text = "🔴 Offline"
         status_color = discord.Color.red()
 
     await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name=activity_text))
 
-    # 4. יצירת ה-Embed המושקע והיוקרתי בחדר הסטטוס
+    # 4. בניית ה-Embed היוקרתי
     embed = discord.Embed(
-        title=f"📊 {SERVER_NAME} | Server Status",
+        title=f"📊 {SERVER_NAME} | Live Status",
         description="Here you can see the live statistics of our servers.",
         color=status_color
     )
@@ -146,7 +152,7 @@ async def update_fivem_status():
     embed.set_footer(text="🔄 Auto-updates every 60 seconds")
     embed.timestamp = discord.utils.utcnow()
 
-    # 5. ניקוי הודעות קודמות ושליחה/עריכה בחדר המדויק
+    # 5. שליחה/עריכה בחדר הסטטוס
     try:
         if status_message is None:
             async for msg in channel.history(limit=15):
@@ -159,7 +165,7 @@ async def update_fivem_status():
         else:
             status_message = await channel.send(embed=embed, view=view)
     except Exception as e:
-        print(f"Error managing live status message: {e}")
+        print(f"[ERROR] Could not send/edit message in status channel: {e}")
 
 @bot.event
 async def on_ready():
