@@ -6,12 +6,12 @@ from threading import Thread
 import discord
 from discord.ext import tasks, commands
 
-# הגדרות שרת Flask עבור Render
+# הגדרות שרת Flask עבור Render לטובת זמינות 24/7
 app = Flask('')
 
 @app.route('/')
 def home():
-    return "Chicago City Bot is Active 24/7!"
+    return "Chicago City Bot - Active"
 
 def run_flask():
     app.run(host='0.0.0.0', port=8080)
@@ -30,8 +30,13 @@ STATUS_CHANNEL_ID = 1506965475270332476
 VERIFY_ROLE_ID = 1483039214793789489
 STAFF_ROLE_ID = 1483039215364345930
 
-# הגדרת הבוט והפעלת Intents מלאים (חובה לאפשר גם ב-Discord Developer Portal)
-intents = discord.Intents.all()  # הפעלת כל ה-Intents למניעת באגים של ספירת ממברים וחדרים
+# הגדרת הבוט והפעלת Intents מפורשים
+intents = discord.Intents.default()
+intents.messages = True
+intents.message_content = True
+intents.members = True        
+intents.guilds = True         
+intents.presences = True      
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 status_message = None
@@ -41,133 +46,95 @@ async def update_fivem_status():
     global status_message
     await bot.wait_until_ready()
     
-    # שליפה קשיחה ומאובטחת של השרת והחדר בדיסקורד
     guild = bot.get_guild(GUILD_ID)
-    if not guild:
-        guild = await bot.fetch_guild(GUILD_ID)
-        
     channel = bot.get_channel(STATUS_CHANNEL_ID)
-    if not channel:
-        channel = await bot.fetch_channel(STATUS_CHANNEL_ID)
 
     if not guild or not channel:
-        print("[ERROR] משהו בהגדרות ה-ID של השרת או החדר לא תקין בקוד!")
+        print("[ERROR] Guild or Channel missing.")
         return
 
-    # 1. ספירה מוחלטת של שרת הדיסקורד
+    # 1. חישוב נתוני דיסקורד (עובד תמיד)
     total_members = guild.member_count
     online_members = sum(1 for m in guild.members if m.status in [discord.Status.online, discord.Status.dnd, discord.Status.idle] and not m.bot)
     
     staff_role = guild.get_role(STAFF_ROLE_ID)
-    online_staff_discord = 0
-    if staff_role:
-        online_staff_discord = sum(1 for m in staff_role.members if m.status in [discord.Status.online, discord.Status.dnd, discord.Status.idle])
+    online_staff_discord = sum(1 for m in staff_role.members if m.status in [discord.Status.online, discord.Status.dnd, discord.Status.idle]) if staff_role else 0
 
-    # 2. משיכת נתוני FiveM דרך שרת פנימי ייעודי שלא נחסם לעולם
-    url = f"https://fivem.net{CFX_CODE}"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-        "Accept": "application/json"
-    }
-    
+    # ערכי ברירת מחדל ל-FiveM כדי שהקוד לא ייתקע לעולם
     clients = 0
     max_clients = 32
     staff_online_fivem = 0
-    server_online = False
+    status_text = "🔴 Offline / Loading"
+    status_color = discord.Color.red()
+    activity_text = "0 / 32 of FIVEM"
 
-    async with aiohttp.ClientSession() as session:
-        try:
-            async with session.get(url, headers=headers, timeout=10) as response:
+    # 2. ניסיון משיכת נתונים מאינטרנט (עטוף ב-try/except מוחלט שלא קורס)
+    try:
+        url = f"https://fivem.net{CFX_CODE}"
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=5) as response:
                 if response.status == 200:
                     data = await response.json()
                     server_data = data.get('Data', {})
                     if server_data:
                         clients = server_data.get('clients', 0)
                         max_clients = server_data.get('sv_maxclients', 32)
-                        server_online = True
+                        status_text = "🟢 Online"
+                        status_color = discord.Color.green()
+                        activity_text = f"{clients} / {max_clients} of FIVEM"
                         
-                        # ספירת אנשי צוות בתוך שרת המשחק (FiveM)
                         players_list = server_data.get('players', [])
                         for player in players_list:
-                            identifiers = player.get('identifiers', [])
-                            for ident in identifiers:
+                            for ident in player.get('identifiers', []):
                                 if ident.startswith('discord:'):
                                     try:
                                         d_id = int(ident.split(':')[1])
                                         member = guild.get_member(d_id)
                                         if member and staff_role in member.roles:
                                             staff_online_fivem += 1
-                                            break
-                                    except:
-                                        continue
-        except Exception as e:
-            print(f"[API ERROR] Main endpoint failed: {e}")
+                                    except: pass
+    except Exception as e:
+        print(f"[FiveM API Timeout/Error] {e} - Continuing to Discord update...")
 
-    # 3. עדכון הסטטוס המשחקי של הבוט (Custom Status)
-    if server_online:
-        activity_text = f"{clients} / {max_clients} of FIVEM"
-        status_text = "🟢 Online"
-        status_color = discord.Color.green()
-    else:
-        # אם ה-API לא עובד זמנית, הבוט יקבל ערכים מדורגים לבדיקה
-        activity_text = "0 / 32 of FIVEM"
-        status_text = "🟢 Online"
-        status_color = discord.Color.green()
-        server_online = True  # אילוץ למצב אונליין כדי שההודעה תשלח תמיד
-
+    # 3. עדכון הסטטוס המשחקי של הבוט (Bio)
     await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name=activity_text))
 
-    # 4. יצירת ה-Embed המלא, המעוצב והיוקרתי בחדר הסטטוס (properties block)
+    # 4. בניית הודעת הסטטוס (Embed)
     embed = discord.Embed(
         title=f"📊 {SERVER_NAME} | Live Network Status",
         description="Here you can see the live statistics of our community.",
         color=status_color
     )
-    
     embed.add_field(
         name="🎮 FiveM Server Statistics",
-        value=f"```properties\n"
-              f"Server Status   : {status_text}\n"
-              f"Online Players  : {clients}/{max_clients}\n"
-              f"Staff In-Game   : {staff_online_fivem}\n"
-              f"Server IP       : {SERVER_IP}\n"
-              f"```",
+        value=f"```properties\nServer Status   : {status_text}\nOnline Players  : {clients}/{max_clients}\nStaff In-Game   : {staff_online_fivem}\nServer IP       : {SERVER_IP}\n```",
         inline=False
     )
-    
     embed.add_field(
         name="👥 Discord Server Statistics",
-        value=f"```properties\n"
-              f"Total Members   : {total_members}\n"
-              f"Online Members  : {online_members}\n"
-              f"Staff Online    : {online_staff_discord}\n"
-              f"```",
+        value=f"```properties\nTotal Members   : {total_members}\nOnline Members  : {online_members}\nStaff Online    : {online_staff_discord}\n```",
         inline=False
     )
 
     view = discord.ui.View()
     view.add_item(discord.ui.Button(label="⚡ Connect to FiveM", url=f"https://cfx.re{CFX_CODE}", style=discord.ButtonStyle.link))
-
-    if guild.icon:
-        embed.set_thumbnail(url=guild.icon.url)
-        
+    if guild.icon: embed.set_thumbnail(url=guild.icon.url)
     embed.set_footer(text="🔄 Auto-updates every 60 seconds")
     embed.timestamp = discord.utils.utcnow()
 
-    # 5. מחיקת הודעות קודמות של הבוט בחדר ושליחת הודעה נקייה וחדשה לגמרי
+    # 5. מחיקה ושליחה אגרסיבית לחדר ללא באגים
     try:
         if status_message is None:
-            async for msg in channel.history(limit=20):
+            async for msg in channel.history(limit=5):
                 if msg.author == bot.user and msg.embeds:
                     status_message = msg
                     break
-        
         if status_message:
             await status_message.edit(embed=embed, view=view)
         else:
             status_message = await channel.send(embed=embed, view=view)
     except Exception as e:
-        print(f"[ERROR] שליחת הסטטוס נכשלה: {e}")
+        print(f"[Discord Send Error] {e}")
 
 @bot.event
 async def on_ready():
@@ -187,7 +154,6 @@ class VerifyView(discord.ui.View):
         role = interaction.guild.get_role(VERIFY_ROLE_ID)
         if not role:
             return await interaction.response.send_message("Verify role not found!", ephemeral=True)
-        
         if role in interaction.user.roles:
             await interaction.response.send_message("You are already verified!", ephemeral=True)
         else:
@@ -213,7 +179,6 @@ class TicketOpenView(discord.ui.View):
     async def open_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
         guild = interaction.guild
         ticket_name = f"ticket-{interaction.user.name}".lower()
-        
         existing_channel = discord.utils.get(guild.channels, name=ticket_name)
         if existing_channel:
             return await interaction.response.send_message(f"You already have an open ticket: {existing_channel.mention}", ephemeral=True)
@@ -223,9 +188,7 @@ class TicketOpenView(discord.ui.View):
             interaction.user: discord.PermissionOverwrite(read_messages=True, send_messages=True, attach_files=True),
             guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True)
         }
-
         channel = await guild.create_text_channel(name=ticket_name, overwrites=overwrites)
-        
         embed = discord.Embed(
             title=f"{SERVER_NAME} | Support Ticket",
             description=f"Hello {interaction.user.mention},\nStaff will be with you shortly. Click the button below to close this ticket.",
@@ -275,12 +238,9 @@ async def suggest(ctx, *, suggestion: str):
 @bot.command()
 @commands.has_permissions(kick_members=True)
 async def warn(ctx, member: discord.Member, *, reason: str = "No reason provided"):
-    if member.id not in warnings_db:
-        warnings_db[member.id] = []
-    
+    if member.id not in warnings_db: warnings_db[member.id] = []
     warnings_db[member.id].append(reason)
     total_warns = len(warnings_db[member.id])
-    
     embed = discord.Embed(
         title="Member Warned",
         description=f"{member.mention} has been warned.\n**Reason:** {reason}\n**Total Warnings:** {total_warns}",
@@ -292,28 +252,22 @@ async def warn(ctx, member: discord.Member, *, reason: str = "No reason provided
 async def warnings(ctx, member: discord.Member = None):
     member = member or ctx.author
     warns = warnings_db.get(member.id, [])
-    
-    if not warns:
-        return await ctx.send(f"{member.mention} has no warnings.")
-    
+    if not warns: return await ctx.send(f"{member.mention} has no warnings.")
     embed = discord.Embed(title=f"Warnings for {member.name}", color=discord.Color.red())
     for i, reason in enumerate(warns, 1):
         embed.add_field(name=f"Warning #{i}", value=reason, inline=False)
     await ctx.send(embed=embed)
 
-# --- טעינת כפתורים קבועים בהפעלת הבוט (Persistent Views) ---
+# --- טעינת כפתורים קבועים (Persistent Views) ---
 @bot.event
 async def on_connect():
     bot.add_view(VerifyView())
     bot.add_view(TicketOpenView())
     bot.add_view(TicketControlView())
 
-# --- הרצת השרת והבוט ---
+# --- הרצת הבוט ---
 if __name__ == "__main__":
-    keep_alive()  # הפעלת שרת ה-Flask לטובת Render
-    
+    keep_alive()  
     token = os.getenv("DISCORD_TOKEN")
-    if not token:
-        print("ERROR: DISCORD_TOKEN environment variable is missing!")
-    else:
-        bot.run(token)
+    if not token: print("ERROR: DISCORD_TOKEN environment variable is missing!")
+    else: bot.run(token)
