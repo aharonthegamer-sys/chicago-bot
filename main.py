@@ -88,7 +88,7 @@ class TicketControls(View):
         if interaction.guild.get_role(ROLE_STAFF) not in interaction.user.roles and not interaction.user.guild_permissions.administrator:
             return await interaction.response.send_message("❌ אין לך הרשאה לבצע פעולה זו!", ephemeral=True)
         await interaction.response.send_message("⌨️ אנא הקלד את השם החדש שאתה רוצה לתת לחדר הטיקט כעת:", ephemeral=True)
-        def check(m): return m.author == interaction.user smash m.channel == interaction.channel
+        def check(m): return m.author == interaction.user and m.channel == interaction.channel
         try:
             msg = await bot.wait_for('message', check=check, timeout=30)
             await interaction.channel.edit(name=f"ticket-{msg.content}")
