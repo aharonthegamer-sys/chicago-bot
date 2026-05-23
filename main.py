@@ -11,7 +11,7 @@ app = Flask('')
 
 @app.route('/')
 def home():
-    return "Chicago City Bot - Active"
+    return "Chicago City Bot - Live System Active"
 
 def run_flask():
     app.run(host='0.0.0.0', port=8080)
@@ -30,7 +30,7 @@ STATUS_CHANNEL_ID = 1506965475270332476
 VERIFY_ROLE_ID = 1483039214793789489
 STAFF_ROLE_ID = 1483039215364345930
 
-# הגדרת הבוט והפעלת Intents מפורשים
+# הגדרת ה-Intents בצורה מפורשת (חובה להדליק את שלושת ה-Intents ב-Developer Portal)
 intents = discord.Intents.default()
 intents.messages = True
 intents.message_content = True
@@ -39,40 +39,51 @@ intents.guilds = True
 intents.presences = True      
 
 bot = commands.Bot(command_prefix="!", intents=intents)
-status_message = None
+
+# פקודה ראשונית לקיבוע הודעת הסטטוס בחדר (מנהלים בלבד)
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def send_status(ctx):
+    await ctx.message.delete()
+    embed = discord.Embed(
+        title=f"📊 {SERVER_NAME} | Server Status",
+        description="Initializing network statistics... Please wait.",
+        color=discord.Color.orange()
+    )
+    await ctx.send(embed=embed)
 
 @tasks.loop(seconds=60)
 async def update_fivem_status():
-    global status_message
     await bot.wait_until_ready()
     
     guild = bot.get_guild(GUILD_ID)
     channel = bot.get_channel(STATUS_CHANNEL_ID)
 
     if not guild or not channel:
-        print("[ERROR] Guild or Channel missing.")
         return
 
-    # 1. חישוב נתוני דיסקורד (עובד תמיד)
+    # 1. חישוב נתוני דיסקורד מתוך ה-Cache (בצורה בטוחה שלא תוקעת את הקוד)
     total_members = guild.member_count
     online_members = sum(1 for m in guild.members if m.status in [discord.Status.online, discord.Status.dnd, discord.Status.idle] and not m.bot)
     
     staff_role = guild.get_role(STAFF_ROLE_ID)
     online_staff_discord = sum(1 for m in staff_role.members if m.status in [discord.Status.online, discord.Status.dnd, discord.Status.idle]) if staff_role else 0
 
-    # ערכי ברירת מחדל ל-FiveM כדי שהקוד לא ייתקע לעולם
+    # ערכי ברירת מחדל למקרה של נפילת API
     clients = 0
     max_clients = 32
     staff_online_fivem = 0
-    status_text = "🔴 Offline / Loading"
+    status_text = "🔴 Offline / API Timeout"
     status_color = discord.Color.red()
     activity_text = "0 / 32 of FIVEM"
 
-    # 2. ניסיון משיכת נתונים מאינטרנט (עטוף ב-try/except מוחלט שלא קורס)
+    # 2. קבלת נתוני אמת משרת ה-FiveM (מוגבל בזמן קצר כדי למנוע קפיאה של הבוט)
+    url = f"https://fivem.net{CFX_CODE}"
+    headers = {"User-Agent": "Mozilla/5.0"}
+    
     try:
-        url = f"https://fivem.net{CFX_CODE}"
         async with aiohttp.ClientSession() as session:
-            async with session.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=5) as response:
+            async with session.get(url, headers=headers, timeout=5) as response:
                 if response.status == 200:
                     data = await response.json()
                     server_data = data.get('Data', {})
@@ -88,18 +99,18 @@ async def update_fivem_status():
                             for ident in player.get('identifiers', []):
                                 if ident.startswith('discord:'):
                                     try:
-                                        d_id = int(ident.split(':')[1])
+                                        d_id = int(ident.split(':'))
                                         member = guild.get_member(d_id)
                                         if member and staff_role in member.roles:
                                             staff_online_fivem += 1
                                     except: pass
     except Exception as e:
-        print(f"[FiveM API Timeout/Error] {e} - Continuing to Discord update...")
+        print(f"[FiveM API Network Error] {e}")
 
-    # 3. עדכון הסטטוס המשחקי של הבוט (Bio)
+    # 3. עדכון הסטטוס בביו של הבוט (Custom Activity - Watching)
     await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name=activity_text))
 
-    # 4. בניית הודעת הסטטוס (Embed)
+    # 4. בניית ה-Embed היוקרתי והמלא
     embed = discord.Embed(
         title=f"📊 {SERVER_NAME} | Live Network Status",
         description="Here you can see the live statistics of our community.",
@@ -122,19 +133,18 @@ async def update_fivem_status():
     embed.set_footer(text="🔄 Auto-updates every 60 seconds")
     embed.timestamp = discord.utils.utcnow()
 
-    # 5. מחיקה ושליחה אגרסיבית לחדר ללא באגים
+    # 5. חיפוש ההודעה האחרונה של הבוט בחדר ועריכתה (מניע באגים לחלוטין)
     try:
-        if status_message is None:
-            async for msg in channel.history(limit=5):
-                if msg.author == bot.user and msg.embeds:
-                    status_message = msg
-                    break
-        if status_message:
-            await status_message.edit(embed=embed, view=view)
-        else:
-            status_message = await channel.send(embed=embed, view=view)
+        target_message = None
+        async for msg in channel.history(limit=10):
+            if msg.author == bot.user and msg.embeds:
+                target_message = msg
+                break
+        
+        if target_message:
+            await target_message.edit(embed=embed, view=view)
     except Exception as e:
-        print(f"[Discord Send Error] {e}")
+        print(f"[Discord Embed Update Error] {e}")
 
 @bot.event
 async def on_ready():
