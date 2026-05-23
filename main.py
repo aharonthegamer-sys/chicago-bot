@@ -25,10 +25,11 @@ def keep_alive():
 SERVER_NAME = "Chicago City"
 CFX_CODE = "rmadb7p"
 SERVER_IP = "135.148.36.192:30125"
+GUILD_ID = 1483039214793789483
 STATUS_CHANNEL_ID = 1506965475270332476
 VERIFY_ROLE_ID = 1483039214793789489
 
-# הגדרת הבוט ו-Intents בסיסיים ויציבים
+# הגדרת הבוט וה-Intents הבסיסיים ביותר למניעת חסימות
 intents = discord.Intents.default()
 intents.messages = True
 intents.message_content = True
@@ -38,28 +39,40 @@ intents.guilds = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 status_message = None
 
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def send_status(ctx):
+    await ctx.message.delete()
+    embed = discord.Embed(
+        title=f"📊 {SERVER_NAME} | Server Status",
+        description="Initializing network statistics... Please wait.",
+        color=discord.Color.orange()
+    )
+    await ctx.send(embed=embed)
+
 @tasks.loop(seconds=60)
 async def update_fivem_status():
     global status_message
     await bot.wait_until_ready()
     
+    # שליפת חדר וערוץ מתוך השרת בצורה מאובטחת
+    guild = bot.get_guild(GUILD_ID)
     channel = bot.get_channel(STATUS_CHANNEL_ID)
-    if not channel:
+    if not guild or not channel:
         return
-    guild = channel.guild
 
-    # 1. חישוב נתוני דיסקורד בצורה פשוטה שלא קורסת
+    # 1. חישוב נתוני אמת של הדיסקורד (עובד תמיד ב-100%)
     total_members = guild.member_count
 
-    # ערכי ברירת מחדל קבועים (יוצג אופליין עד שנסדר את ה-API של ה-FiveM שלכם)
+    # ערכי ברירת מחדל למקרה שה-FiveM באופליין או לא מגיב
     clients = 0
     max_clients = 32
     status_text = "🔴 Offline"
     status_color = discord.Color.red()
     activity_text = "0 / 32 of FIVEM"
 
-    # 2. ניסיון בסיסי למשוך נתונים מ-FiveM
-    url = f"https://fivem.net{CFX_CODE}"
+    # 2. פנייה מאובטחת ל-API של FiveM (עטופה בהגנה מוחלטת מקריסות)
+    url = f"https://servers-frontend.fivem.net/api/servers/single/{CFX_CODE}"
     headers = {"User-Agent": "Mozilla/5.0"}
     
     try:
@@ -74,15 +87,18 @@ async def update_fivem_status():
                         status_text = "🟢 Online"
                         status_color = discord.Color.green()
                         activity_text = f"{clients} / {max_clients} of FIVEM"
+    except Exception as e:
+        print(f"[FiveM API Connection Saved] Server is offline or API timed out: {e}")
+
+    # 3. עדכון הסטטוס בביו של הבוט (Custom Activity - Watching)
+    try:
+        await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name=activity_text))
     except:
-        pass  # אם ה-API חסום ב-Render, הקוד פשוט ממשיך הלאה ולא נתקע
+        pass
 
-    # 3. עדכון הסטטוס המשחקי של הבוט (Bio)
-    await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name=activity_text))
-
-    # 4. בניית הודעת הסטטוס המעוצבת (Embed)
+    # 4. בניית הודעת הסטטוס המעוצבת (Properties Block)
     embed = discord.Embed(
-        title=f"📊 {SERVER_NAME} | Server Status",
+        title=f"📊 {SERVER_NAME} | Live Status",
         description="Here you can see the live statistics of our community.",
         color=status_color
     )
@@ -102,7 +118,7 @@ async def update_fivem_status():
     if guild.icon: embed.set_thumbnail(url=guild.icon.url)
     embed.set_footer(text="🔄 Auto-updates every 60 seconds")
 
-    # 5. שליחה או עריכה אוטומטית של ההודעה בערוץ
+    # 5. מנגנון סריקה ועריכה/שליחה אוטומטי לחלוטין ללא תקיעות
     try:
         if status_message is None:
             async for msg in channel.history(limit=5):
@@ -114,12 +130,12 @@ async def update_fivem_status():
             await status_message.edit(embed=embed, view=view)
         else:
             status_message = await channel.send(embed=embed, view=view)
-    except:
-        pass
+    except Exception as e:
+        print(f"[Discord Write Error] {e}")
 
 @bot.event
 async def on_ready():
-    print(f"Logged in as {bot.user.name}")
+    print(f"Logged in and synchronized as {bot.user.name}")
     if not update_fivem_status.is_running():
         update_fivem_status.start()
 # מאגר נתונים זמני בזיכרון עבור אזהרות
