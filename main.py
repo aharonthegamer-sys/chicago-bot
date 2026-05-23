@@ -6,14 +6,15 @@ from threading import Thread
 import discord
 from discord.ext import tasks, commands
 
-# אתחול שרת Flask מותאם פיקס לפורט של Render למניעת קריסות
+# אתחול שרת Flask מותאם 100% לדרישות של Render למניעת כיבוי הבוט
 app = Flask('')
 
 @app.route('/')
 def home():
-    return "Chicago City Bot - Active!"
+    return "Chicago City Bot is Active 24/7!"
 
 def run_flask():
+    # Render מחייבת שימוש בפורט הדינמי או פורט 10000 כברירת מחדל
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
 
@@ -22,7 +23,7 @@ def keep_alive():
     t.daemon = True
     t.start()
 
-# נתונים קבועים ומדויקים של שרת שיקגו סיטי (כבר מוטמעים בפנים!)
+# נתונים קבועים ומדויקים של שרת שיקגו סיטי
 SERVER_NAME = "Chicago City"
 CFX_CODE = "rmadb7p"
 SERVER_IP = "135.148.36.192"
@@ -39,65 +40,53 @@ intents.members = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 status_message = None
 
-@tasks.loop(seconds=60) # הלולאה רצה ומעדכנת את שני המקומות במקביל כל 60 שניות
-async def update_bot_status_system():
+# פונקציה מרכזית לעדכון הסטטוס והחדר במקביל
+async def perform_status_update():
     global status_message
-    await bot.wait_until_ready()
-    
     guild = bot.get_guild(GUILD_ID)
     channel = bot.get_channel(STATUS_CHANNEL_ID)
 
     if not guild or not channel:
-        print("[ERROR] Guild or Channel not found!")
+        print("[ERROR] Guild or Channel missing.")
         return
 
-    # חישוב סך הממברים בדיסקורד
     total_members = guild.member_count
-
-    # ערכי ברירת מחדל למקרה שהשרת מכובה או חסום
     clients = 0
     max_clients = 32
     status_text = "🟢 פעיל (Online)"
     embed_color = discord.Color.green()
     server_online = False
 
-    # 1. פנייה לשרת ה-FiveM לקבלת נתוני אמת
-    url = f"http://{SERVER_IP}:{SERVER_PORT}/dynamic.json"
+    # פנייה ל-API הציבורי של FiveM
+    url = f"https://fivem.net{CFX_CODE}"
     headers = {"User-Agent": "Mozilla/5.0"}
     
-    async with aiohttp.ClientSession() as session:
-        try:
-            async with session.get(url, timeout=5) as response:
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=headers, timeout=6) as response:
                 if response.status == 200:
                     data = await response.json()
-                    clients = data.get('clients', 0)
-                    max_clients = data.get('sv_maxclients', 32)
-                    server_online = True
-        except:
-            # מנגנון גיבוי רשמי לעקיפת חסימות פורטים ב-Render
-            try:
-                backup_url = f"https://fivem.net{CFX_CODE}"
-                async with session.get(backup_url, headers=headers, timeout=5) as backup_resp:
-                    if backup_resp.status == 200:
-                        b_data = await backup_resp.json()
-                        server_data = b_data.get('Data', {})
-                        if server_data:
-                            clients = server_data.get('clients', 0)
-                            max_clients = server_data.get('sv_maxclients', 32)
-                            server_online = True
-            except:
-                status_text = "🔴 מנותק / תחזוקה"
-                embed_color = discord.Color.red()
+                    server_data = data.get('Data', {})
+                    if server_data:
+                        clients = server_data.get('clients', 0)
+                        max_clients = server_data.get('sv_maxclients', 32)
+                        server_online = True
+                else:
+                    status_text = "🔴 מנותק / תחזוקה"
+                    embed_color = discord.Color.red()
+    except:
+        status_text = "🔴 מנותק / שגיאת API"
+        embed_color = discord.Color.red()
 
-    # 2. עדכון הסטטוס המשחקי בפרופיל של הבוט (Watching X / Y of FiveM)
+    # 1. עדכון הסטטוס המשחקי בפרופיל (Watching)
     if server_online:
-        activity_text = f"{clients} / {max_clients} of FiveM"
+        activity_text = f"FiveM | {clients}/{max_clients}"
     else:
-        activity_text = "0 / 32 of FiveM | Offline ❌"
-    
+        activity_text = "FiveM | Offline ❌"
+        
     await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name=activity_text))
 
-    # 3. בניית הודעת ה-Embed המעוצבת והיוקרתית לתוך החדר
+    # 2. בניית הודעת ה-Embed המעוצבת
     embed = discord.Embed(
         title=f"📊 סטטוס רשת | {SERVER_NAME}",
         description="הנתונים של שרת המשחק והדיסקורד מסונכרנים ומתעדכנים כל דקה.",
@@ -120,7 +109,7 @@ async def update_bot_status_system():
     embed.set_footer(text="Chicago City Network • Auto Sync")
     embed.timestamp = discord.utils.utcnow()
 
-    # 4. מנגנון שליחה ועריכה אוטומטי לחלוטין (ללא צורך בפקודות)
+    # 3. מנגנון עריכה/שליחה מיידי לתוך החדר
     try:
         if status_message is None:
             async for msg in channel.history(limit=5):
@@ -135,11 +124,19 @@ async def update_bot_status_system():
     except Exception as e:
         print(f"[Discord Error] {e}")
 
+# לולאת רענון קבועה כל 60 שניות
+@tasks.loop(seconds=60)
+async def update_status_loop():
+    await perform_status_update()
+
 @bot.event
 async def on_ready():
     print(f"Bot is fully synchronized: {bot.user.name}")
-    if not update_bot_status_system.is_running():
-        update_bot_status_system.start()
+    # אילוץ ריצה ראשונית מיידית בשנייה שהבוט נדלק!
+    await perform_status_update()
+    # הפעלת הלולאה המחזורית ברקע
+    if not update_status_loop.is_running():
+        update_fivem_status_loop = update_status_loop.start()
 # מאגר נתונים זמני בזיכרון עבור אזהרות
 warnings_db = {}
 
@@ -281,9 +278,9 @@ async def on_connect():
     bot.add_view(TicketOpenView())
     bot.add_view(TicketControlView())
 
-# --- הרצת הבוט ---
+# --- הרצת השרת והבוט ---
 if __name__ == "__main__":
-    keep_alive()  
+    keep_alive()  # הפעלת שרת ה-Flask לטובת Render
     
     token = os.getenv("DISCORD_TOKEN")
     if not token:
