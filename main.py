@@ -21,13 +21,13 @@ def keep_alive():
     t.daemon = True
     t.start()
 
-# נתונים קבועים של שיקגו סיטי
+# נתונים קבועים ומדויקים של שיקגו סיטי (לפי הקישור והגדרות השרת)
 SERVER_NAME = "Chicago City"
 CFX_CODE = "rmadb7p"
-SERVER_IP = "135.148.36.192:30125"
-VERIFY_ROLE_ID = 1483039214793789489
+GUILD_ID = 1483039214793789483
 STATUS_CHANNEL_ID = 1506965475270332476
-STAFF_ROLE_ID = 1483039215364345930  # רול הצוות המעודכן שלכם
+VERIFY_ROLE_ID = 1483039214793789489
+STAFF_ROLE_ID = 1483039215364345930
 
 # הגדרת הבוט ו-Intents
 intents = discord.Intents.default()
@@ -45,12 +45,13 @@ async def update_fivem_status():
     global status_message
     await bot.wait_until_ready()
     
+    guild = bot.get_guild(GUILD_ID)
     channel = bot.get_channel(STATUS_CHANNEL_ID)
-    if not channel:
+    if not channel or not guild:
+        print(f"Error: Guild ({GUILD_ID}) or Channel ({STATUS_CHANNEL_ID}) not found.")
         return
-    guild = channel.guild
 
-    # 1. נתוני שרת הדיסקורד וצוות בדיסקורד
+    # 1. חישוב נתוני דיסקורד וצוות אונליין
     total_members = guild.member_count
     online_members = sum(1 for m in guild.members if m.status in [discord.Status.online, discord.Status.dnd, discord.Status.idle])
     
@@ -59,43 +60,45 @@ async def update_fivem_status():
     if staff_role:
         online_staff_discord = sum(1 for m in staff_role.members if m.status in [discord.Status.online, discord.Status.dnd, discord.Status.idle])
 
-    # 2. קריאת נתוני שחקנים וצוות בתוך ה-FiveM
-    players_url = f"http://{SERVER_IP}/players.json"
-    dynamic_url = f"http://{SERVER_IP}/dynamic.json"
+    # 2. משיכת נתוני FiveM משרת Proxy ציבורי (עוקף חסימות Cloudflare)
+    url = f"https://fivem.net{CFX_CODE}"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
     
     clients = 0
-    max_clients = 128
+    max_clients = 32 # ברירת מחדל כפי שביקשת בעיצוב
     staff_online_fivem = 0
     server_online = False
 
     async with aiohttp.ClientSession() as session:
         try:
-            # משיכת כמות שחקנים כללית
-            async with session.get(dynamic_url, timeout=7) as response:
+            async with session.get(url, headers=headers, timeout=10) as response:
                 if response.status == 200:
-                    dynamic_data = await response.json()
-                    clients = dynamic_data.get('clients', 0)
-                    max_clients = dynamic_data.get('sv_maxclients', 128)
+                    data = await response.json()
+                    server_data = data.get('Data', {})
+                    clients = server_data.get('clients', 0)
+                    max_clients = server_data.get('sv_maxclients', 32)
                     server_online = True
-            
-            # משיכת רשימת שחקנים לספירת אנשי צוות בתוך המשחק
-            if server_online and staff_role:
-                async with session.get(players_url, timeout=7) as response:
-                    if response.status == 200:
-                        players_data = await response.json()
-                        for player in players_data:
-                            identifiers = player.get('identifiers', [])
-                            for ident in identifiers:
-                                if ident.startswith('discord:'):
-                                    discord_id = int(ident.split(':')[1])
-                                    member = guild.get_member(discord_id)
+                    
+                    # ספירת אנשי צוות שנמצאים כרגע בתוך השרת
+                    players_list = server_data.get('players', [])
+                    for player in players_list:
+                        identifiers = player.get('identifiers', [])
+                        for ident in identifiers:
+                            if ident.startswith('discord:'):
+                                try:
+                                    d_id = int(ident.split(':')[1])
+                                    member = guild.get_member(d_id)
                                     if member and staff_role in member.roles:
                                         staff_online_fivem += 1
                                         break
+                                except:
+                                    continue
         except Exception as e:
-            print(f"FiveM Fetch Error: {e}")
+            print(f"FiveM Proxy API Error: {e}")
 
-    # 3. עדכון הביו של הבוט (Watching 0 / 32 of FIVEM)
+    # 3. עדכון סטטוס ה-Watching הדינמי בביו של הבוט
     if server_online:
         activity_text = f"{clients} / {max_clients} of FIVEM"
         status_text = "🟢 Online"
@@ -107,9 +110,9 @@ async def update_fivem_status():
 
     await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name=activity_text))
 
-    # 4. בניית ה-Embed המושקע בסגנון המקצועי
+    # 4. יצירת ה-Embed המושקע והיוקרתי בחדר הסטטוס
     embed = discord.Embed(
-        title=f"📊 {SERVER_NAME} | Live Status",
+        title=f"📊 {SERVER_NAME} | Server Status",
         description="Here you can see the live statistics of our servers.",
         color=status_color
     )
@@ -120,7 +123,6 @@ async def update_fivem_status():
               f"Status: {status_text}\n"
               f"Players: {clients}/{max_clients}\n"
               f"Staff In-Game: {staff_online_fivem}\n"
-              f"IP Address: {SERVER_IP}\n"
               f"```",
         inline=False
     )
@@ -144,10 +146,10 @@ async def update_fivem_status():
     embed.set_footer(text="🔄 Auto-updates every 60 seconds")
     embed.timestamp = discord.utils.utcnow()
 
-    # 5. מניעת כפילויות הודעות בחדר
+    # 5. ניקוי הודעות קודמות ושליחה/עריכה בחדר המדויק
     try:
         if status_message is None:
-            async for msg in channel.history(limit=10):
+            async for msg in channel.history(limit=15):
                 if msg.author == bot.user and msg.embeds:
                     status_message = msg
                     break
@@ -157,7 +159,7 @@ async def update_fivem_status():
         else:
             status_message = await channel.send(embed=embed, view=view)
     except Exception as e:
-        print(f"Error updating embed: {e}")
+        print(f"Error managing live status message: {e}")
 
 @bot.event
 async def on_ready():
