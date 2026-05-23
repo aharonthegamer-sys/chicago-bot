@@ -12,7 +12,7 @@ app = Flask('')
 
 @app.route('/')
 def home():
-    return "Chicago City Premium Network Core is Live!"
+    return "Chicago City Expert Core is Online!"
 
 def run_flask():
     port = int(os.environ.get("PORT", 10000))
@@ -66,7 +66,6 @@ async def update_discord_radar():
     if len(guild.members) < guild.member_count:
         await guild.chunk()
 
-    # חישוב נתונים מתקדם
     total_members = guild.member_count
     bot_count = sum(1 for m in guild.members if m.bot)
     real_humans = total_members - bot_count
@@ -80,12 +79,11 @@ async def update_discord_radar():
     boost_count = guild.premium_subscription_count
     boost_level = guild.premium_tier
 
-    # עיצוב מומחה: נקי, חדשני ומרשים
     embed = discord.Embed(
         title=f"⚫ {SERVER_NAME.upper()} | LIVE STATS",
         description="ברוכים הבאים ללוח המידע המרכזי של הרשת.\nהנתונים המוצגים מטה מסונכרנים ישירות מול ה-API של דיסקורד.\n\n"
                     "**─── קהילה ותשתית ───**",
-        color=0x010101 # שחור יוקרתי ונקי
+        color=0x010101 
     )
     
     embed.add_field(
@@ -108,7 +106,6 @@ async def update_discord_radar():
         inline=False
     )
 
-    # כפתורים פונקציונליים תואמי עיצוב
     view = discord.ui.View()
     view.add_item(discord.ui.Button(label="🔗 Web Store", url="https://discord.com", style=discord.ButtonStyle.link))
     view.add_item(discord.ui.Button(label="📜 Server Rules", url="https://discord.com", style=discord.ButtonStyle.link))
@@ -132,6 +129,7 @@ async def update_discord_radar():
             status_message = await channel.send(embed=embed, view=view)
     except Exception as e:
         print(f"[Discord Embed Error] {e}")
+
 # ========================================================
 # 4. מערכת אימות מעוצבת (PREMIUM VERIFY PANEL)
 # ========================================================
@@ -150,56 +148,165 @@ class VerifyView(discord.ui.View):
         
         await interaction.user.add_roles(role)
         await interaction.response.send_message("✅ האימות בוצע בהצלחה! ברוך הבא לשרת Chicago City.", ephemeral=True)
+# ========================================================
+# 5. מערכת מודאלים (חלונות קופצים) לניהול הטיקט
+# ========================================================
+
+# חלון קופץ לשינוי שם הטיקט
+class RenameTicketModal(discord.ui.Modal, title="📝 שינוי שם הערוץ"):
+    new_name = discord.ui.TextInput(label="הזן שם חדש לערוץ (באותיות קטנות ואנגלית)", placeholder="e.g., bug-fixed", required=True, min_length=3, max_length=20)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        clean_name = self.new_name.value.lower().replace(" ", "-")
+        await interaction.channel.edit(name=clean_name)
+        
+        embed = discord.Embed(
+            description=f"✏️ שם הערוץ שונה בהצלחה ל: **{clean_name}** ע\"י {interaction.user.mention}",
+            color=discord.Color.blue()
+        )
+        await interaction.response.send_message(embed=embed)
+
+# חלון קופץ להוספת משתמש לטיקט
+class AddMemberModal(discord.ui.Modal, title="👤 הוספת חבר לטיקט"):
+    member_id = discord.ui.TextInput(label="הזן את ה-ID של המשתמש", placeholder="e.g., 1483039214793789483", required=True, min_length=15, max_length=20)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            member = interaction.guild.get_member(int(self.member_id.value))
+            if not member:
+                member = await interaction.guild.fetch_member(int(self.member_id.value))
+                
+            if member:
+                await interaction.channel.set_permissions(member, read_messages=True, send_messages=True, attach_files=True)
+                embed = discord.Embed(
+                    description=f"✅ המשתמש {member.mention} התווסף לטיקט בהצלחה ע\"י {interaction.user.mention}",
+                    color=discord.Color.green()
+                )
+                await interaction.response.send_message(embed=embed)
+            else:
+                await interaction.response.send_message("❌ המשתמש לא נמצא בשרת, ודא שה-ID תקין.", ephemeral=True)
+        except Exception as e:
+            await interaction.response.send_message(f"❌ שגיאה: ודא שהזנת מספר ID תקין בלבד. ({e})", ephemeral=True)
 
 # ========================================================
-# 5. מערכת טיקטים מתקדמת (ADVANCED SUPPORT TICKET SYSTEM)
+# 6. פאנל כפתורי השליטה בתוך הטיקט (STAFF TICKET CONTROL)
 # ========================================================
 class TicketControlView(discord.ui.View):
-    def __init__(self): 
+    def __init__(self):
         super().__init__(timeout=None)
-        
-    @discord.ui.button(label="🔒 סגור פנייה / Close Ticket", style=discord.ButtonStyle.danger, custom_id="close_ticket_btn")
+
+    # כפתור סגירה
+    @discord.ui.button(label="🔒 סגור טיקט", style=discord.ButtonStyle.danger, custom_id="btn_close_t")
     async def close_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message("🛑 הפנייה תיסגר ותימחק מהמערכת בעוד 5 שניות...", ephemeral=False)
+        await interaction.response.send_message("🛑 הטיקט ייסגר ויימחק מהמערכת בעוד 5 שניות...", ephemeral=False)
         await asyncio.sleep(5)
         await interaction.channel.delete()
 
-class TicketOpenView(discord.ui.View):
-    def __init__(self): 
-        super().__init__(timeout=None)
+    # כפתור לקיחת טיפול (Claim)
+    @discord.ui.button(label="🙋‍♂️ קח טיפול (Claim)", style=discord.ButtonStyle.success, custom_id="btn_claim_t")
+    async def claim_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # בדיקה האם המשתמש שלחץ הוא איש צוות
+        staff_role = interaction.guild.get_role(STAFF_ROLE_ID)
+        if staff_role not in interaction.user.roles and not interaction.user.guild_permissions.administrator:
+            return await interaction.response.send_message("❌ רק אנשי צוות יכולים לקחת טיפול על פניות!", ephemeral=True)
+
+        button.disabled = True
+        button.label = f"🙋‍♂️ בטיפול של: {interaction.user.name}"
+        button.style = discord.ButtonStyle.secondary
         
-    @discord.ui.button(label="📩 פתיחת פנייה / Open Ticket", style=discord.ButtonStyle.primary, custom_id="open_ticket_btn")
-    async def open_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
+        embed = discord.Embed(
+            description=f"💼 איש הצוות {interaction.user.mention} לקח את הטיקט תחת טיפולו הבלעדי.",
+            color=discord.Color.green()
+        )
+        await interaction.response.edit_message(view=self)
+        await interaction.channel.send(embed=embed)
+
+    # כפתור שינוי שם
+    @discord.ui.button(label="✏️ שינוי שם", style=discord.ButtonStyle.primary, custom_id="btn_rename_t")
+    async def rename_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
+        staff_role = interaction.guild.get_role(STAFF_ROLE_ID)
+        if staff_role not in interaction.user.roles and not interaction.user.guild_permissions.administrator:
+            return await interaction.response.send_message("❌ הרשאה זו חסומה עבורך.", ephemeral=True)
+        await interaction.response.send_modal(RenameTicketModal())
+
+    # כפתור הוספת משתמש
+    @discord.ui.button(label="➕ הוסף משתמש", style=discord.ButtonStyle.secondary, custom_id="btn_add_m_t")
+    async def add_member(self, interaction: discord.Interaction, button: discord.ui.Button):
+        staff_role = interaction.guild.get_role(STAFF_ROLE_ID)
+        if staff_role not in interaction.user.roles and not interaction.user.guild_permissions.administrator:
+            return await interaction.response.send_message("❌ הרשאה זו חסומה עבורך.", ephemeral=True)
+        await interaction.response.send_modal(AddMemberModal())
+
+# ========================================================
+# 7. תפריט הבחירה (DROPDOWN SELECT MENU) של הטיקטים
+# ========================================================
+class TicketDropdown(discord.ui.Select):
+    def __init__(self):
+        options = [
+            discord.SelectOption(label="דיווח על שחקן / צוות", description="Report a player or a staff member", emoji="🚨", value="report"),
+            discord.SelectOption(label="דיווח על באג", description="Report a technical server bug", emoji="🐛", value="bug"),
+            discord.SelectOption(label="בחינה לצוות השרת", description="Apply for a staff position", emoji="📝", value="apply"),
+            discord.SelectOption(label="שאלה כללית / עזרה", description="General question or assistance", emoji="❓", value="general")
+        ]
+        super().__init__(placeholder="🔽 בחר את קטגוריית הפנייה שלך...", min_values=1, max_values=1, options=options, custom_id="ticket_dropdown_select")
+
+    async def callback(self, interaction: discord.Interaction):
+        category = self.values[0]
         guild = interaction.guild
-        ticket_name = f"ticket-{interaction.user.name}".lower()
         
+        # תרגום קטגוריות לשמות הערוצים
+        category_titles = {
+            "report": "🚨| דיווח שחקן-צוות",
+            "bug": "🐛| דיווח על באג",
+            "apply": "📝| בחינה לצוות",
+            "general": "❓| שאלה כללית"
+        }
+        
+        ticket_prefix = {
+            "report": "report",
+            "bug": "bug",
+            "apply": "apply",
+            "general": "help"
+        }
+
+        ticket_name = f"{ticket_prefix[category]}-{interaction.user.name}".lower()
+        
+        # מניעת כפילויות של פתיחת חדרים
         existing_channel = discord.utils.get(guild.channels, name=ticket_name)
         if existing_channel:
             return await interaction.response.send_message(f"❌ כבר יש לך פנייה פתוחה במערכת: {existing_channel.mention}", ephemeral=True)
-            
+
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(read_messages=False),
             interaction.user: discord.PermissionOverwrite(read_messages=True, send_messages=True, attach_files=True),
             guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True)
         }
-        
+
         channel = await guild.create_text_channel(name=ticket_name, overwrites=overwrites)
         
+        # בניית ה-Embed הפנימי של הטיקט בעיצוב מומחה
         embed = discord.Embed(
-            title=f"🎫 פנייה חדשה | {interaction.user.name.upper()}",
-            description="שלום רב,\nצוות הניהול קיבל את פנייתך ויתפנה אליך בהקדם האפשרי.\nאנא פרט את סיבת הפנייה שלך כאן על מנת לזרז את הטיפול.",
+            title=f"🎫 פנייה חדשה | קטגוריה: {category_titles[category]}",
+            description=f"שלום רב {interaction.user.mention},\nצוות הניהול קיבל את פנייתך בנושא זה ויתפנה אליך בהקדם.\n\n"
+                        f"**📋 כיצד להתקדם?**\nאנא פרט וספק את כל ההוכחות/מידע הרלוונטי כאן בצ'אט על מנת שנוכל לטפל בך במהירות.",
             color=0x5865F2
         )
         embed.add_field(name="👤 פותח הפנייה", value=interaction.user.mention, inline=True)
-        embed.add_field(name="🛠️ סטטוס טיפול", value="```במתנה לצוות הניהול```", inline=True)
-        embed.set_footer(text="Chicago City System Support")
+        embed.add_field(name="🛠️ פאנל ניהול", value="אנשי צוות, השתמשו בכפתורים מטה לניהול המקרה.", inline=True)
+        embed.set_footer(text=f"Chicago City Network • {category_titles[category]}")
         embed.timestamp = discord.utils.utcnow()
-        
+
         await channel.send(embed=embed, view=TicketControlView())
-        await interaction.response.send_message(f"✅ הפנייה שלך נוצרה בהצלחה: {channel.mention}", ephemeral=True)
+        await interaction.response.send_message(f"✅ הפנייה שלך נוצרה בהצלחה בחדר: {channel.mention}", ephemeral=True)
+
+# תצוגת פאנל הטיקטים שמכילה את ה-Dropdown
+class TicketOpenView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+        self.add_item(TicketDropdown())
 
 # ========================================================
-# 6. פקודות הקמה וניהול בעיצוב פרימיום (SETUP COMMANDS)
+# 8. פקודות ניהול והקמה (SETUP COMMANDS)
 # ========================================================
 @bot.command()
 @commands.has_permissions(administrator=True)
@@ -222,94 +329,10 @@ async def setup_tickets(ctx):
     await ctx.message.delete()
     embed = discord.Embed(
         title=f"🎫 מרכז תמיכה ופניות | {SERVER_NAME.upper()}",
-        description="צריך עזרה? נתקלת בבעיה טכנית או שברצונך לדווח על שחקן?\nלחץ על כפתור פתיחת הפנייה המופיע מטה, וחדר אישי ייפתח עבורך מול צוות השרת.\n\n"
-                    "**🚨 דגש חשוב:**\nפתיחת פניות ספאם או פניות שווא תוביל לענישה.",
+        description="צריך עזרה? נתקלת בבעיה או שברצונך לפתוח פנייה רשמית?\nהשתמש בתפריט הבחירה המופיע מטה, בחר את הקטגוריה המתאימה ביותר למקרה שלך, וחדר אישי ייפתח עבורך מול צוות השרת.\n\n"
+                    "**🚨 דגש חשוב:**\nפתיחת פניות ספאם או פניות שווא תוביל לענישה מיידית.",
         color=0x3498db
     )
     if ctx.guild.icon:
         embed.set_thumbnail(url=ctx.guild.icon.url)
     embed.set_footer(text="Chicago City Support Center")
-    await ctx.send(embed=embed, view=TicketOpenView())
-
-# --- מערכת הצעות משודרגת (EXPERT SUGGESTIONS) ---
-@bot.command()
-async def suggest(ctx, *, suggestion: str):
-    await ctx.message.delete()
-    embed = discord.Embed(
-        title="💡 הצעה חדשה מהקהילה",
-        description=f"```{suggestion}```",
-        color=0xf1c40f
-    )
-    embed.set_author(name=ctx.author.name, icon_url=ctx.author.display_avatar.url)
-    embed.add_field(name="📊 מדד הצבעות", value="הצבע באמצעות האימוג'ים המופיעים מטה:", inline=False)
-    embed.set_footer(text="Chicago City Suggestion Core")
-    embed.timestamp = discord.utils.utcnow()
-    
-    msg = await ctx.send(embed=embed)
-    await msg.add_reaction("✅")
-    await msg.add_reaction("❌")
-
-# --- מערכת אזהרות מקצועית (EXPERT MODERATION) ---
-@bot.command()
-@commands.has_permissions(kick_members=True)
-async def warn(ctx, member: discord.Member, *, reason: str = "לא צוינה סיבה תקינה"):
-    if member.id not in warnings_db: 
-        warnings_db[member.id] = []
-    warnings_db[member.id].append(reason)
-    
-    embed = discord.Embed(
-        title="🛡️ רישום אזהרה למערכת",
-        color=0xe67e22
-    )
-    embed.add_field(name="👤 משתמש שנאזן", value=member.mention, inline=True)
-    embed.add_field(name="👮 האוכף", value=ctx.author.mention, inline=True)
-    embed.add_field(name="📝 סיבת האזהרה", value=f"```{reason}```", inline=False)
-    embed.add_field(name="📊 סך הכל אזהרות", value=f"`{len(warnings_db[member.id])}`", inline=False)
-    embed.set_footer(text="Chicago City Moderation Core")
-    embed.timestamp = discord.utils.utcnow()
-    await ctx.send(embed=embed)
-
-@bot.command()
-async def warnings(ctx, member: discord.Member = None):
-    member = member or ctx.author
-    warns = warnings_db.get(member.id, [])
-    
-    if not warns: 
-        return await ctx.send(f"🟢 **{member.name}** נקי לחלוטין ואין לו אזהרות רשומות במערכת.")
-    
-    embed = discord.Embed(
-        title=f"📋 תיק אזהרות עבור {member.name.upper()}", 
-        color=0xe74c3c
-    )
-    for i, reason in enumerate(warns, 1):
-        embed.add_field(name=f"📌 אזהרה מספר #{i}", value=f"סיבה: `{reason}`", inline=False)
-    embed.set_footer(text=f"Total: {len(warns)} warnings")
-    await ctx.send(embed=embed)
-
-# ========================================================
-# 7. סנכרון כפתורים קבועים והפעלה רשמית
-# ========================================================
-@bot.event
-async def on_connect():
-    bot.add_view(VerifyView())
-    bot.add_view(TicketOpenView())
-    bot.add_view(TicketControlView())
-
-@bot.event
-async def on_ready():
-    print(f"==================================================")
-    print(f" PREMIUM CORE OPERATIONAL: {bot.user.name.upper()}")
-    print(f" NETWORK RADAR IS LIVE AND MONITORING SERVER DATA")
-    print(f"==================================================")
-    await bot.change_presence(activity=None)
-    if not update_discord_radar.is_running():
-        update_discord_radar.start()
-
-if __name__ == "__main__":
-    keep_alive()
-    
-    token = os.getenv("DISCORD_TOKEN")
-    if not token:
-        print("ERROR: DISCORD_TOKEN variable is missing from system environment!")
-    else:
-        bot.run(token)
