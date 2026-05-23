@@ -6,12 +6,12 @@ from threading import Thread
 import discord
 from discord.ext import tasks, commands
 
-# הגדרות שרת Flask עבור Render
+# הגדרות שרת Flask עבור Render לטובת זמינות 24/7
 app = Flask('')
 
 @app.route('/')
 def home():
-    return "Chicago City Bot - Live System Active"
+    return "Chicago City Bot is Online!"
 
 def run_flask():
     app.run(host='0.0.0.0', port=8080)
@@ -25,12 +25,10 @@ def keep_alive():
 SERVER_NAME = "Chicago City"
 CFX_CODE = "rmadb7p"
 SERVER_IP = "135.148.36.192:30125"
-GUILD_ID = 1483039214793789483
 STATUS_CHANNEL_ID = 1506965475270332476
 VERIFY_ROLE_ID = 1483039214793789489
-STAFF_ROLE_ID = 1483039215364345930
 
-# הגדרת ה-Intents בצורה בטוחה וחסינת שגיאות
+# הגדרת הבוט ו-Intents בסיסיים ויציבים
 intents = discord.Intents.default()
 intents.messages = True
 intents.message_content = True
@@ -38,96 +36,64 @@ intents.members = True
 intents.guilds = True         
 
 bot = commands.Bot(command_prefix="!", intents=intents)
-
-@bot.command()
-@commands.has_permissions(administrator=True)
-async def send_status(ctx):
-    await ctx.message.delete()
-    embed = discord.Embed(
-        title=f"📊 {SERVER_NAME} | Server Status",
-        description="Initializing network statistics... Please wait.",
-        color=discord.Color.orange()
-    )
-    await ctx.send(embed=embed)
+status_message = None
 
 @tasks.loop(seconds=60)
 async def update_fivem_status():
+    global status_message
     await bot.wait_until_ready()
     
-    guild = bot.get_guild(GUILD_ID)
     channel = bot.get_channel(STATUS_CHANNEL_ID)
-
-    if not guild or not channel:
-        print("[ERROR] Guild or Channel missing.")
+    if not channel:
         return
+    guild = channel.guild
 
-    # 1. חישוב נתוני דיסקורד בצורה חסינת קריסות (ללא דרישה ל-Presence Intent)
+    # 1. חישוב נתוני דיסקורד בצורה פשוטה שלא קורסת
     total_members = guild.member_count
-    
-    # ספירת סך הכל אנשי צוות שיש להם את הרול בשרת
-    staff_role = guild.get_role(STAFF_ROLE_ID)
-    total_staff = len(staff_role.members) if staff_role else 0
 
-    # ערכי ברירת מחדל קבועים של השרת
+    # ערכי ברירת מחדל קבועים (יוצג אופליין עד שנסדר את ה-API של ה-FiveM שלכם)
     clients = 0
     max_clients = 32
-    staff_online_fivem = 0
-    status_text = "🟢 Online"
-    status_color = discord.Color.green()
+    status_text = "🔴 Offline"
+    status_color = discord.Color.red()
     activity_text = "0 / 32 of FIVEM"
 
-    # 2. קבלת נתוני אמת משרת ה-FiveM (מוגבל ב-Timeout קצר)
+    # 2. ניסיון בסיסי למשוך נתונים מ-FiveM
     url = f"https://fivem.net{CFX_CODE}"
     headers = {"User-Agent": "Mozilla/5.0"}
     
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.get(url, headers=headers, timeout=6) as response:
+            async with session.get(url, headers=headers, timeout=5) as response:
                 if response.status == 200:
                     data = await response.json()
                     server_data = data.get('Data', {})
                     if server_data:
                         clients = server_data.get('clients', 0)
                         max_clients = server_data.get('sv_maxclients', 32)
+                        status_text = "🟢 Online"
+                        status_color = discord.Color.green()
                         activity_text = f"{clients} / {max_clients} of FIVEM"
-                        
-                        players_list = server_data.get('players', [])
-                        for player in players_list:
-                            for ident in player.get('identifiers', []):
-                                if ident.startswith('discord:'):
-                                    try:
-                                        d_id = int(ident.split(':'))
-                                        member = guild.get_member(d_id)
-                                        if member and staff_role in member.roles:
-                                            staff_online_fivem += 1
-                                    except: pass
-                else:
-                    status_text = "🔴 Offline / API Error"
-                    status_color = discord.Color.red()
-                    activity_text = "0 / 32 of FIVEM"
-    except Exception as e:
-        print(f"[FiveM API Info] {e}")
-        status_text = "🔴 Offline / Timeout"
-        status_color = discord.Color.red()
-        activity_text = "0 / 32 of FIVEM"
+    except:
+        pass  # אם ה-API חסום ב-Render, הקוד פשוט ממשיך הלאה ולא נתקע
 
-    # 3. עדכון הביו של הבוט ל-Watching
+    # 3. עדכון הסטטוס המשחקי של הבוט (Bio)
     await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name=activity_text))
 
-    # 4. בניית ה-Embed היוקרתי והאמיתי כפי שביקשת
+    # 4. בניית הודעת הסטטוס המעוצבת (Embed)
     embed = discord.Embed(
-        title=f"📊 {SERVER_NAME} | Live Network Status",
+        title=f"📊 {SERVER_NAME} | Server Status",
         description="Here you can see the live statistics of our community.",
         color=status_color
     )
     embed.add_field(
-        name="🎮 FiveM Server Statistics",
-        value=f"```properties\nServer Status   : {status_text}\nOnline Players  : {clients}/{max_clients}\nStaff In-Game   : {staff_online_fivem}\nServer IP       : {SERVER_IP}\n```",
+        name="🎮 FiveM Server",
+        value=f"```properties\nStatus: {status_text}\nPlayers: {clients}/{max_clients}\nIP: {SERVER_IP}\n```",
         inline=False
     )
     embed.add_field(
-        name="👥 Discord Server Statistics",
-        value=f"```properties\nTotal Members   : {total_members}\nTotal Staff Members: {total_staff}\n```",
+        name="💬 Discord Server",
+        value=f"```properties\nTotal Members: {total_members}\n```",
         inline=False
     )
 
@@ -135,20 +101,21 @@ async def update_fivem_status():
     view.add_item(discord.ui.Button(label="⚡ Connect to FiveM", url=f"https://cfx.re{CFX_CODE}", style=discord.ButtonStyle.link))
     if guild.icon: embed.set_thumbnail(url=guild.icon.url)
     embed.set_footer(text="🔄 Auto-updates every 60 seconds")
-    embed.timestamp = discord.utils.utcnow()
 
-    # 5. עריכת ההודעה המקובעת שכבר קיימת בחדר שלכם!
+    # 5. שליחה או עריכה אוטומטית של ההודעה בערוץ
     try:
-        target_message = None
-        async for msg in channel.history(limit=5):
-            if msg.author == bot.user and msg.embeds:
-                target_message = msg
-                break
+        if status_message is None:
+            async for msg in channel.history(limit=5):
+                if msg.author == bot.user and msg.embeds:
+                    status_message = msg
+                    break
         
-        if target_message:
-            await target_message.edit(embed=embed, view=view)
-    except Exception as e:
-        print(f"[Discord Embed Update Error] {e}")
+        if status_message:
+            await status_message.edit(embed=embed, view=view)
+        else:
+            status_message = await channel.send(embed=embed, view=view)
+    except:
+        pass
 
 @bot.event
 async def on_ready():
