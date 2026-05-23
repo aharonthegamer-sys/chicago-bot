@@ -1,8 +1,27 @@
 import os
 import asyncio
 import aiohttp
+from flask import Flask
+from threading import Thread
 import discord
 from discord.ext import tasks, commands
+
+# אתחול שרת Flask מותאם פיקס לפורט של Render
+app = Flask('')
+
+@app.route('/')
+def home():
+    return "Chicago City Bot - Dynamic Status System Active!"
+
+def run_flask():
+    # Render תמיד שולחת משתנה סביבה בשם PORT, ואם לא - נשתמש בפורט הסטנדרטי 10000
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host='0.0.0.0', port=port)
+
+def keep_alive():
+    t = Thread(target=run_flask)
+    t.daemon = True
+    t.start()
 
 # נתונים קבועים ומדויקים של שרת שיקגו סיטי
 SERVER_NAME = "Chicago City"
@@ -13,7 +32,7 @@ STATUS_CHANNEL_ID = 1506965475270332476
 VERIFY_ROLE_ID = 1483039214793789489
 STAFF_ROLE_ID = 1483039215364345930
 
-# הגדרת ה-Intents בצורה המפורשת והבטוחה ביותר
+# הגדרת ה-Intents למניעת חסימות או קריסות בדיסקורד
 intents = discord.Intents.default()
 intents.messages = True
 intents.message_content = True
@@ -272,8 +291,10 @@ async def on_connect():
     bot.add_view(TicketOpenView())
     bot.add_view(TicketControlView())
 
-# --- הרצת הבוט ---
+# --- הרצת השרת והבוט ---
 if __name__ == "__main__":
+    keep_alive()  # הפעלת שרת ה-Flask לטובת Render
+    
     token = os.getenv("DISCORD_TOKEN")
     if not token:
         print("ERROR: DISCORD_TOKEN environment variable is missing!")
