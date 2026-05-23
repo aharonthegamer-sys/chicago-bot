@@ -7,13 +7,13 @@ import discord
 from discord.ext import tasks, commands
 
 # ========================================================
-# 1. שרת FLASK הרמטי עבור RENDER (WEB CONSOLE)
+# 1. שרת FLASK עבור RENDER
 # ========================================================
 app = Flask('')
 
 @app.route('/')
 def home():
-    return "Chicago City Diamond Automation Core v3 is Online!"
+    return "Chicago City Diamond Automation Core is Active!"
 
 def run_flask():
     port = int(os.environ.get("PORT", 10000))
@@ -25,7 +25,7 @@ def keep_alive():
     t.start()
 
 # ========================================================
-# 2. קונפיגורציה קשיחה ומעודכנת – ניתוב ערוצים סופי
+# 2. קונפיגורציה קשיחה ומבודדת – ערוצים ורולים רשמיים
 # ========================================================
 SERVER_NAME = "Chicago City Roleplay"
 GUILD_ID = 1483039214793789483
@@ -33,33 +33,33 @@ GUILD_ID = 1483039214793789483
 LOGO_URL = "https://discordapp.com"
 BANNER_URL = "https://discordapp.com"
 
-# ערוצי פנלים לקהילה ולצוות - מסודר לפי הקישורים המדויקים שלך!
-STATUS_CHANNEL_ID = 1506965475270332476       # חדר סרבר סטטוס
-WELCOME_CHANNEL_ID = 1483039215032041530      # חדר ברוכים הבאים
-VERIFY_PANEL_CH = 1483039214793789489         # חדר אימות (✔️-verfiy)
-TICKET_PANEL_CH = 1483039218954534966         # חדר טיקטים רשמי לקהילה
+# ערוצי פנלים רשמיים לקהילה ולצוות (פרונט)
+STATUS_CHANNEL_ID = 1506965475270332476       # סרבר סטטוס
+WELCOME_CHANNEL_ID = 1483039215032041530      # ברוכים הבאים
+VERIFY_PANEL_CH = 1483039214793789489         # חדר אימות (verfiy)
+TICKET_PANEL_CH = 1483039218954534966         # חדר טיקטים רשמי (tickets)
 
-GIVEAWAY_PANEL_CH = 1507022943413342328       # פנל ניהול הגרלות לצוות
+GIVEAWAY_PANEL_CH = 1507022943413342328       # פנל ניהול הגרלות
 GIVEAWAY_FEED_CH = 1483039216366780532        # פיד הגרלות לשחקנים
 
-WARN_PANEL_CH = 1507023136095207515           # פנל ניהול אזהרות לצוות
-WARN_FEED_CH = 1483039219336347810            # פיד אזהרות רשמי (#staff-warns)
+WARN_PANEL_CH = 1507023136095207515           # פנל ניהול אזהרות
+WARN_FEED_CH = 1483039219336347810            # פיד אזהרות (staff-warns)
 
 SUGGEST_PANEL_CH = 1507020507776811068        # פנל ניהול הצעות
-SUGGEST_FEED_CH = 1483039217482334253         # פיד הצעות להצבעה
+SUGGEST_FEED_CH = 1483039217482334253         # פיד הצעות
 
-# רשת ערוצי הלוגים הרשמית (תיעוד פנימי)
-LOG_TICKET = 1483039219654852612              # לוג טיקטים (🎫-Ticket-logs)
-LOG_CHANNEL_DELETE = 1483039219654852616       # לוג מחיקת חדרים
-LOG_CHANNEL_CREATE = 1483039219654852617       # לוג יצירת חדרים
-LOG_CHANNEL_UPDATE = 1483039219923554468       # לוג עדכון חדרים
-LOG_BAN_ADD = 1483039219923554469              # לוג באנים
-LOG_BAN_REMOVE = 1483039219923554470           # לוג הסרת באנים
-LOG_MEMBER_ADD = 1483039219923554475           # לוג כניסת חברים
-LOG_MEMBER_REMOVE = 1483039219923554476        # לוג עזיבת חברים
-LOG_SECURITY = 1483039220284002367             # לוג אבטחה ואימות
-LOG_ROLE_ADD = 1507881637705420961             # לוג הוספת רול
-LOG_ROLE_REMOVE = 1507881755753971872          # לוג הסרת רול
+# רשת ערוצי הלוגים (תיעוד פנימי בלבד)
+LOG_TICKET = 1483039219654852612              # Ticket-logs
+LOG_CHANNEL_DELETE = 1483039219654852616       # Channel-delete-log
+LOG_CHANNEL_CREATE = 1483039219654852617       # Channel-create-log
+LOG_CHANNEL_UPDATE = 1483039219923554468       # Channel-update-log
+LOG_BAN_ADD = 1483039219923554469              # Ban-add-log
+LOG_BAN_REMOVE = 1483039219923554470           # Ban-remove-log
+LOG_MEMBER_ADD = 1483039219923554475           # Member-add-log
+LOG_MEMBER_REMOVE = 1483039219923554476        # Member-remove-log
+LOG_SECURITY = 1483039220284002367             # Security-logs
+LOG_ROLE_ADD = 1507881637705420961             # Role-add-log
+LOG_ROLE_REMOVE = 1507881755753971872          # Role-remove-log
 
 # הגדרות מזהי רולים מערכתיים
 VERIFY_ROLE_ID = 1483039214793789489
@@ -183,7 +183,7 @@ class VerifyView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    @discord.ui.button(label="🔑 אימות חשבון / VERIFY", style=discord.ButtonStyle.green, custom_id="verify_btn_v8_final")
+    @discord.ui.button(label="🔑 אימות חשבון / VERIFY", style=discord.ButtonStyle.green, custom_id="verify_btn_v9_final")
     async def verify_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         role = interaction.guild.get_role(VERIFY_ROLE_ID)
         if not role: 
@@ -235,7 +235,7 @@ class TicketControlView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    @discord.ui.button(label="🔒 סגור טיקט / Close", style=discord.ButtonStyle.danger, custom_id="btn_close_t_v8")
+    @discord.ui.button(label="🔒 סגור טיקט / Close", style=discord.ButtonStyle.danger, custom_id="btn_close_t_v9")
     async def close_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
         staff_role = interaction.guild.get_role(STAFF_ROLE_ID)
         if staff_role not in interaction.user.roles and not interaction.user.guild_permissions.administrator:
@@ -246,7 +246,7 @@ class TicketControlView(discord.ui.View):
         await asyncio.sleep(5)
         await interaction.channel.delete()
 
-    @discord.ui.button(label="🙋‍♂️ קח טיפול / Claim", style=discord.ButtonStyle.success, custom_id="btn_claim_t_v8")
+    @discord.ui.button(label="🙋‍♂️ קח טיפול / Claim", style=discord.ButtonStyle.success, custom_id="btn_claim_t_v9")
     async def claim_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
         staff_role = interaction.guild.get_role(STAFF_ROLE_ID)
         if staff_role not in interaction.user.roles and not interaction.user.guild_permissions.administrator:
@@ -257,14 +257,14 @@ class TicketControlView(discord.ui.View):
         await interaction.channel.send(embed=discord.Embed(description=f"💼 פנייה בטיפול של {interaction.user.mention}", color=discord.Color.green()))
         await dispatch_log(LOG_TICKET, "Ticket Claimed", f"Claimed by {interaction.user.name}", 0x2ecc71)
 
-    @discord.ui.button(label="✏️ שינוי שם", style=discord.ButtonStyle.primary, custom_id="btn_rename_t_v8")
+    @discord.ui.button(label="✏️ שינוי שם", style=discord.ButtonStyle.primary, custom_id="btn_rename_t_v9")
     async def rename_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
         staff_role = interaction.guild.get_role(STAFF_ROLE_ID)
         if staff_role not in interaction.user.roles and not interaction.user.guild_permissions.administrator:
             return await interaction.response.send_message("❌ שגיאה: כפתור זה חסום ומיועד לצוות השרת בלבד!", ephemeral=True)
         await interaction.response.send_modal(RenameTicketModal())
 
-    @discord.ui.button(label="➕ הוסף משתמש", style=discord.ButtonStyle.secondary, custom_id="btn_add_m_t_v8")
+    @discord.ui.button(label="➕ הוסף משתמש", style=discord.ButtonStyle.secondary, custom_id="btn_add_m_t_v9")
     async def add_member(self, interaction: discord.Interaction, button: discord.ui.Button):
         staff_role = interaction.guild.get_role(STAFF_ROLE_ID)
         if staff_role not in interaction.user.roles and not interaction.user.guild_permissions.administrator:
@@ -279,7 +279,7 @@ class TicketDropdown(discord.ui.Select):
             discord.SelectOption(label="בחינה לצוות השרת", description="Apply for staff", emoji="📝", value="apply"),
             discord.SelectOption(label="שאלה כללית / עזרה", description="General help", emoji="❓", value="general")
         ]
-        super().__init__(placeholder="🔽 בחר את קטגוריית הפנייה שלך...", options=options, custom_id="ticket_dropdown_v8_auto")
+        super().__init__(placeholder="🔽 בחר את קטגוריית הפנייה שלך...", options=options, custom_id="ticket_dropdown_v9_auto")
 
     async def callback(self, interaction: discord.Interaction):
         category = self.values
@@ -318,7 +318,7 @@ class CreateGiveawayModal(discord.ui.Modal, title="🎁 יצירת הגרלה ח
 
 class GiveawayPanelView(discord.ui.View):
     def __init__(self): super().__init__(timeout=None)
-    @discord.ui.button(label="🎁 פתח הגרלה חדשה לשחקנים", style=discord.ButtonStyle.green, custom_id="btn_g_v8_auto")
+    @discord.ui.button(label="🎁 פתח הגרלה חדשה לשחקנים", style=discord.ButtonStyle.green, custom_id="btn_g_v9_auto")
     async def open_g(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.guild.get_role(GIVEAWAY_ROLE_ID) not in interaction.user.roles and not interaction.user.guild_permissions.administrator:
             return await interaction.response.send_message("❌ שגיאה: פעולה זו מיועדת לצוות הגרלות בלבד!", ephemeral=True)
@@ -364,19 +364,19 @@ class RemoveWarnModal(discord.ui.Modal, title="🗑️ מחיקת אזהרה מ�
 
 class WarnPanelView(discord.ui.View):
     def __init__(self): super().__init__(timeout=None)
-    @discord.ui.button(label="⚠️ רשום אזהרה למנהל", style=discord.ButtonStyle.danger, custom_id="btn_w_v8_auto")
+    @discord.ui.button(label="⚠️ רשום אזהרה למנהל", style=discord.ButtonStyle.danger, custom_id="btn_w_v9_auto")
     async def issue_w(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.guild.get_role(WARN_STAFF_ROLE_ID) not in interaction.user.roles and not interaction.user.guild_permissions.administrator:
             return await interaction.response.send_message("❌ שגיאה: פעולה זו מיועדת להנהלה עליונה בלבד!", ephemeral=True)
         await interaction.response.send_modal(IssueWarnModal())
 
-    @discord.ui.button(label="📋 כמות ואזהרים בתיק", style=discord.ButtonStyle.secondary, custom_id="btn_cw_v8_auto")
+    @discord.ui.button(label="📋 כמות ואזהרים בתיק", style=discord.ButtonStyle.secondary, custom_id="btn_cw_v9_auto")
     async def check_w(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.guild.get_role(WARN_STAFF_ROLE_ID) not in interaction.user.roles and not interaction.user.guild_permissions.administrator:
             return await interaction.response.send_message("❌ שגיאה: פעולה זו מיועדת להנהלה עליונה בלבד!", ephemeral=True)
         await interaction.response.send_modal(CheckWarnModal())
 
-    @discord.ui.button(label="🟢 מחק אזהרה (Unwarn)", style=discord.ButtonStyle.success, custom_id="btn_rw_v8_auto")
+    @discord.ui.button(label="🟢 מחק אזהרה (Unwarn)", style=discord.ButtonStyle.success, custom_id="btn_rw_v9_auto")
     async def remove_w(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.guild.get_role(WARN_STAFF_ROLE_ID) not in interaction.user.roles and not interaction.user.guild_permissions.administrator:
             return await interaction.response.send_message("❌ שגיאה: פעולה זו מיועדת להנהלה עליונה בלבד!", ephemeral=True)
@@ -395,7 +395,7 @@ class CreateSuggestionModal(discord.ui.Modal, title="Suggestion"):
 
 class SuggestionsPanelView(discord.ui.View):
     def __init__(self): super().__init__(timeout=None)
-    @discord.ui.button(label="🗳️ לחצו כאן והגישו הצעה חדשה לעיר", style=discord.ButtonStyle.primary, custom_id="btn_s_v8_auto")
+    @discord.ui.button(label="🗳️ לחצו כאן והגישו הצעה חדשה לעיר", style=discord.ButtonStyle.primary, custom_id="btn_s_v9_auto")
     async def open_s(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.guild.get_role(VERIFY_ROLE_ID) not in interaction.user.roles and not interaction.user.guild_permissions.administrator:
             return await interaction.response.send_message("❌ עליך לעבור אימות (Verify) לפני שתוכל להגיש הצעה!", ephemeral=True)
