@@ -1,7 +1,7 @@
 import discord
 from discord.ext import commands, tasks
 from discord.ui import Button, View, Select, Modal, TextInput, UserSelect
-import asyncio, datetime, os, random, aiohttp, socket
+import asyncio, datetime, os, random, aiohttp
 from flask import Flask
 from threading import Thread
 
@@ -28,8 +28,9 @@ CHANNEL_STAFF_WARNS_LOG = 1483039219336347810
 CHANNEL_FIVEM_STATUS = 1506965475270332476 
 CHANNEL_TICKET_LOGS = 1483039219654852612
 CHANNEL_INVITE_LOGS = 1506417177719210194 
+CHANNEL_SUGG_PANEL = 1507020507776811068
+CHANNEL_SUGG_LOGS = 1483039217482334253
 
-BOT_SECURITY_ID = 651095740390834176 
 CFX_ID = "rmadb7p"
 
 LOG_CHANNELS = {
@@ -103,7 +104,7 @@ class TicketControls(View):
         try:
             msg = await bot.wait_for('message', check=check, timeout=30)
             if msg.mentions:
-                target = msg.mentions
+                target = msg.mentions[0]
                 await interaction.channel.set_permissions(target, read_messages=True, send_messages=True)
                 await interaction.channel.send(f"🎉 **המערכת הכניסה בהצלחה את** {target.mention} **לתוך חדר התמיכה!** ✅")
             else: await interaction.channel.send("❌ שגיאה: לא תייגת משתמש תקין.")
@@ -137,9 +138,9 @@ class TicketDropdown(Select):
         await interaction.followup.send(f"🎉 הטיקט שלך נוצר בהצלחה! לחץ כאן כדי להיכנס אליו: {ticket_channel.mention}", ephemeral=True)
         
         log_ch = bot.get_channel(CHANNEL_TICKET_LOGS)
-        if log_ch: await log_ch.send(embed=discord.Embed(title="➕ טיקט חדש נפתח בשרת!", description=f"🔹 **פותח הפנייה:** {interaction.user.mention}\n🔹 **נושא הטיקט:** `{self.values}`\n🔹 **חדר:** {ticket_channel.mention}", color=discord.Color.green()))
+        if log_ch: await log_ch.send(embed=discord.Embed(title="➕ טיקט חדש נפתח בשרת!", description=f"🔹 **פותח הפנייה:** {interaction.user.mention}\n🔹 **נושא הטיקט:** `{self.values[0]}`\n🔹 **חדר:** {ticket_channel.mention}", color=discord.Color.green()))
             
-        embed = discord.Embed(title="🎫 מרכז הפניות והתמיכה ➔ CHICAGO CITY 💎", description=f"שלום {interaction.user.mention}! 🎉\n\nפנייתך בנושא המוגדר כמפורט: `{self.values}` נפתחה בהצלחה רבה.\n\n**אנא רשום כאן בצ'אט את כל פירוט המקרה שלך בצורה ברורה ביותר**, ואנשי צוות השרת יגיעו לסייע לך בתוך דקות ספורות! 🚀✨", color=discord.Color.from_rgb(142, 68, 173))
+        embed = discord.Embed(title="🎫 מרכז הפניות והתמיכה ➔ CHICAGO CITY 💎", description=f"שלום {interaction.user.mention}! 🎉\n\nפנייתך בנושא המוגדר כמפורט: `{self.values[0]}` נפתחה בהצלחה רבה.\n\n**אנא רשום כאן בצ'אט את כל פירוט המקרה שלך בצורה ברורה ביותר**, ואנשי צוות השרת יגיעו לסייע לך בתוך דקות ספורות! 🚀✨", color=discord.Color.from_rgb(142, 68, 173))
         embed.set_footer(text="Chicago City • Support System Desk")
         await ticket_channel.send(embed=embed, view=TicketControls())
         p = await ticket_channel.send(f"<@&{ROLE_STAFF}>"); await p.delete()
@@ -149,8 +150,6 @@ class TicketDropdown(Select):
 async def setup_tickets(ctx):
     embed = discord.Embed(title="🎫 מרכז התמיכה והפניות הרשמי של העיר 🎉", description="צריכים עזרה מההנהלה, רוצים לדווח על באג מציק או להגיש מועמדות לצוות? ✨\n\n**אנא פתחו את התפריט הנפתח שמופיע כאן למטה, בחרו את הנושא שלכם וחדר תמיכה פרטי ייפתח עבורכם בשנייה!** 👇💎", color=discord.Color.purple())
     embed.set_footer(text="Chicago City • Helpdesk Terminal")
-    if ctx.guild.icon: embed.set_image(url=ctx.guild.icon.url)
-    await ctx.send(embed=embed, view=View().add_item(TicketDropdown()))
 # --- מערכת הגרלות צבעונית מבוססת פאנל וטפסים (GIVEAWAY MODAL SYSTEM) ---
 class GiveawayModal(Modal):
     def __init__(self):
@@ -296,181 +295,3 @@ class WarnPanelView(View):
         if interaction.guild.get_role(ROLE_WARN_ADMIN) not in interaction.user.roles and not interaction.user.guild_permissions.administrator:
             return await interaction.response.send_message("❌ אבטחה: מיועד לדרג ניהול עליון בלבד!", ephemeral=True)
         view = View().add_item(WarnUserSelect("add"))
-        await interaction.response.send_message("⚙️ **בחרו מתוך רשימת חברי הצוות מטה את המנהל שברצונכם להזהיר:**", view=view, ephemeral=True)
-
-    @discord.ui.button(label="📊 כמות ווארנים בתיק", style=discord.ButtonStyle.grey, custom_id="wp_view")
-    async def view_warn_btn(self, interaction: discord.Interaction, button: Button):
-        if interaction.guild.get_role(ROLE_WARN_ADMIN) not in interaction.user.roles and not interaction.user.guild_permissions.administrator:
-            return await interaction.response.send_message("❌ אבטחה: מיועד לדרג ניהול עליון בלבד!", ephemeral=True)
-        view = View().add_item(WarnUserSelect("view"))
-        await interaction.response.send_message("⚙️ **בחרו חבר צוות מהרשימה למטה כדי לבדוק את כמות האזהרות שלו:**", view=view, ephemeral=True)
-
-    @discord.ui.button(label="🔓 מחק אזהרה (Unwarn)", style=discord.ButtonStyle.green, custom_id="wp_remove")
-    async def remove_warn_btn(self, interaction: discord.Interaction, button: Button):
-        if interaction.guild.get_role(ROLE_WARN_ADMIN) not in interaction.user.roles and not interaction.user.guild_permissions.administrator:
-            return await interaction.response.send_message("❌ אבטחה: מיועד לדרג ניהול עליון בלבד!", ephemeral=True)
-        view = View().add_item(WarnUserSelect("remove"))
-        await interaction.response.send_message("⚙️ **בחרו חבר צוות מהרשימה מטה כדי למחוק לו את האזהרה האחרונה:**", view=view, ephemeral=True)
-
-@bot.command()
-@commands.has_permissions(administrator=True)
-async def setup_warn_panel(ctx):
-    embed = discord.Embed(title="⚠️ פאנל פיקוח ומשמעת הצוות ➔ CHICAGO CITY 🛑", description="מרכז שליטה ואבטחה חסוי לניהול, בדיקה ורישום משמעת בצוות השרת.\n\n**רק דרג ניהול עליון מורשה ללחוץ על הכפתורים ולבצע שינויים או מחיקות!** 🛡️✨", color=discord.Color.red())
-    embed.set_footer(text="Chicago City Management Dashboard Only")
-    await ctx.send(embed=embed, view=WarnPanelView())
-
-# --- מערכת הצעות ---
-class SuggestionModal(Modal):
-    def __init__(self):
-        super().__init__(title="💡 הגשת הצעה מטורפת חדשה לעיר")
-        self.sugg = TextInput(label="רשום ופרט כאן את ההצעה המטורפת שלך", style=discord.TextStyle.paragraph, placeholder="רשום כאן את רעיונך בצורה הכי ברורה...", required=True)
-        self.add_item(self.sugg)
-
-    async def on_submit(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=True)
-        log_ch = bot.get_channel(CHANNEL_SUGG_LOGS)
-        if not log_ch: return await interaction.followup.send("❌ ערוץ הלוגים של ההצעות לא נמצא.", ephemeral=True)
-        embed = discord.Embed(title="💡 הצעה חדשה ומטורפת עלתה לאוויר! 🔥", color=discord.Color.blue())
-        embed.description = f"👑 **תושבי Chicago City היקרים, הצעה חדשה ומטורפת עלתה לשיפוטכם!** 👑\n\n```fix\n{self.sugg.value}```\n🔹 **הוגש בגאווה ע''י:** {interaction.user.mention}"
-        msg = await log_ch.send(embed=embed); await msg.add_reaction("👍"); await msg.add_reaction("👎")
-        await interaction.followup.send("✅ ההצעה נשלחה בהצלחה!", ephemeral=True)
-
-class SuggestionPanelView(View):
-    def __init__(self): super().__init__(timeout=None)
-    @discord.ui.button(label="💡 לחצו כאן והגישו הצעה חדשה לעיר!", style=discord.ButtonStyle.blurple, custom_id="sugg_panel_btn")
-    async def add_sugg(self, interaction: discord.Interaction, button: Button): await interaction.response.send_modal(SuggestionModal())
-
-@bot.command()
-@commands.has_permissions(administrator=True)
-async def setup_suggestions(ctx):
-    embed = discord.Embed(title="💡 תיבת הרעיונות של CHICAGO CITY 💎", description="לחצו על הכפתור למטה והגישו הצעה!", color=discord.Color.blue())
-    await ctx.send(embed=embed, view=SuggestionPanelView())
-
-# פקודת say לצוות
-@bot.command()
-@commands.has_permissions(administrator=True)
-async def say(ctx, channel: discord.TextChannel, em: str, *, content: str):
-    embed = discord.Embed(description=content, color=discord.Color.blue()); await channel.send(embed=embed); await ctx.send("✅ נשלח!")
-
-# לוגים
-@bot.event
-async def on_guild_channel_create(c): await send_log("channel_create", discord.Embed(title="Chicago City", description=f"🟢 ערוץ נוצר: {c.name}", color=discord.Color.green()))
-@bot.event
-async def on_guild_channel_delete(c): await send_log("channel_delete", discord.Embed(title="Chicago City", description=f"🔴 ערוץ נמחק: {c.name}", color=discord.Color.red()))
-@bot.event
-async def on_message_edit(b, a):
-    if b.author.bot or b.content == a.content: return
-    await send_log("message_edit", discord.Embed(title="Chicago City", description=f"📝 הודעה נערכה\nחדר: {b.channel.mention}\nישן: {b.content}\nחדש: {a.content}", color=discord.Color.gold()))
-
-# מעקב הזמנות
-async def fetch_invites(guild):
-    try: return {invite.code: invite for invite in await guild.invites()}
-    except: return {}
-
-@bot.event
-async def on_guild_join(guild): invites_cache[guild.id] = await fetch_invites(guild)
-
-@bot.event
-async def on_ready():
-    print(f"Logged in as {bot.user.name}")
-    for guild in bot.guilds: invites_cache[guild.id] = await fetch_invites(guild)
-    if not update_fivem_status.is_running(): update_fivem_status.start()
-
-@bot.event
-async def on_member_join(member):
-    w_ch = bot.get_channel(LOG_CHANNELS["welcome_embed"])
-    if w_ch:
-        embed = discord.Embed(title="🌈 CHICAGO CITY 🎉", description=f"💎 ברוך הבא, {member.mention}! 🛡️ אימות: <#{ROLE_VERIFIED}>", color=discord.Color.red())
-        embed.set_thumbnail(url=member.display_avatar.url); await w_ch.send(embed=embed)
-
-    log_ch = bot.get_channel(CHANNEL_INVITE_LOGS)
-    if not log_ch: return
-    old_invites = invites_cache.get(member.guild.id, {})
-    new_invites = await fetch_invites(member.guild); invites_cache[member.guild.id] = new_invites
-    inviter_str, code_str, total_str = "קישור ישיר 🔗", "לא ידוע 🔒", "0"
-    for code in old_invites:
-        if code in new_invites and old_invites[code].uses < new_invites[code].uses:
-            inviter = old_invites[code].inviter; inviter_str = inviter.mention; code_str = f"`{code}`"
-            total_str = f"`{sum(inv.uses for inv in new_invites.values() if inv.inviter and inv.inviter.id == inviter.id)}`"
-            break
-    embed = discord.Embed(title="📥 מעקב הזמנות", color=discord.Color.purple())
-    embed.description = f"👤 **אזרח חדש:** {member.mention}\n🤝 **מזמין:** {inviter_str}\n📊 **הזמנות כולל:** {total_str}"
-    embed.set_thumbnail(url=member.display_avatar.url); await log_ch.send(embed=embed)
-
-class FiveMConnectView(View):
-    def __init__(self):
-        super().__init__(timeout=None)
-        self.add_item(discord.ui.Button(label="🚀 התחברות ישירה לעיר!", style=discord.ButtonStyle.link, url="https://cfx.re"))
-
-# משימת הסטטוס המאוחדת והצבעונית כל 2 דקות - הגנת רשת חסינת באגים!
-@tasks.loop(minutes=2)
-async def update_fivem_status():
-    global fivem_msg_id
-    ch = bot.get_channel(CHANNEL_FIVEM_STATUS)
-    if not ch: return
-    guild = ch.guild
-    total_dc_members = guild.member_count
-    online_dc_users = sum(1 for m in guild.members if m.status != discord.Status.offline and not m.bot)
-    staff_role = guild.get_role(ROLE_STAFF)
-    staff_dc_online = sum(1 for m in staff_role.members if m.status != discord.Status.offline and not m.bot) if staff_role else 0
-
-    status_str, players_str, staff_str, color = "🔴 מנותק (Offline)", "0 / 0", "0 מחוברים", discord.Color.red()
-    
-    headers = {"User-Agent": "Mozilla/5.0"}
-    async with aiohttp.ClientSession(headers=headers) as session:
-        try:
-            async with session.get(f"https://fivem.net{CFX_ID}", timeout=5) as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    server_data = data.get("Data", {})
-                    max_clients = server_data.get('sv_maxclients', 0)
-                    
-                    # פקודת ההגנה: אם המקסימום הוא 0 או שאין הגדרה, השרת שלכם מכובה וסגור כעת במכונה!
-                    if max_clients > 0:
-                        status_str = "🟢 מקוון (Online)"
-                        color = discord.Color.green()
-                        players_list = server_data.get("players", [])
-                        players_str = f"{len(players_list)} / {max_clients}"
-                        
-                        activity = discord.Activity(type=discord.ActivityType.watching, name=f"City: {len(players_list)} / {max_clients} 🎮")
-                        await bot.change_presence(activity=activity)
-                        
-                        fivem_identifiers = []
-                        for player in players_list:
-                            for identifier in player.get('identifiers', []):
-                                if identifier.startswith('discord:'):
-                                    fivem_identifiers.append(int(identifier.replace('discord:', '')))
-                        staff_str = f"{sum(1 for m in staff_role.members if m.id in fivem_identifiers)} אנשי צוות" if staff_role else "0 אנשי צוות"
-                    else:
-                        # שרת סגור - מעביר אוטומטית לאופליין אדום ולסטטוס Watching שם השרת!
-                        status_str = "🔴 מנותק (Offline)"
-                        color = discord.Color.red()
-                        activity = discord.Activity(type=discord.ActivityType.watching, name="Chicago City 🎮")
-                        await bot.change_presence(activity=activity)
-                else:
-                    activity = discord.Activity(type=discord.ActivityType.watching, name="Chicago City 🎮")
-                    await bot.change_presence(activity=activity)
-        except:
-            activity = discord.Activity(type=discord.ActivityType.watching, name="Chicago City 🎮")
-            await bot.change_presence(activity=activity)
-
-    embed = discord.Embed(title="📊 רשת הניטור והסטטיסטיקות הרשמית ➔ CHICAGO CITY 💎", color=color, timestamp=datetime.datetime.utcnow())
-    embed.add_field(name="🎮 FIVEM GAME SERVER METRICS", value=f"```ansi\n• סטטוס השרת באוויר: {status_str}\n• שחקנים מחוברים בעיר: {players_str}\n• אנשי צוות בעיר: {staff_str}```", inline=False)
-    embed.add_field(name="💬 DISCORD NETWORK METRICS", value=f"```ansi\n• סך הכל תתושבים: {total_dc_members} אזרחים\n• אזרחים מחוברים כרגע: {online_dc_users}\n• אנשי צוות זמינים: {staff_dc_online} אונליין```", inline=False)
-    embed.set_footer(text="Chicago City • Live Statistics Network Dashboard")
-    if guild.icon: embed.set_thumbnail(url=guild.icon.url)
-
-    try:
-        if fivem_msg_id is None:
-            async for m in ch.history(limit=5):
-                if m.author == bot.user and m.embeds and m.embeds.title == "📊 רשת הניטור והסטטיסטיקות הרשמית ➔ CHICAGO CITY 💎":
-                    fivem_msg_id = m.id; await m.edit(embed=embed, view=FiveMConnectView()); return
-            msg = await ch.send(embed=embed, view=FiveMConnectView())
-            fivem_msg_id = msg.id
-        else:
-            msg = await ch.fetch_message(fivem_msg_id)
-            await msg.edit(embed=embed, view=FiveMConnectView())
-    except: fivem_msg_id = None
-
-keep_alive()
-bot.run(os.environ['DISCORD_TOKEN'])
