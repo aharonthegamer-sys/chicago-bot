@@ -6,12 +6,12 @@ from threading import Thread
 import discord
 from discord.ext import tasks, commands
 
-# הגדרות שרת Flask עבור Render לטובת זמינות 24/7
+# הגדרות שרת Flask עבור Render
 app = Flask('')
 
 @app.route('/')
 def home():
-    return "Chicago City Bot is Online!"
+    return "Status Bot is Online!"
 
 def run_flask():
     app.run(host='0.0.0.0', port=8080)
@@ -29,7 +29,7 @@ GUILD_ID = 1483039214793789483
 STATUS_CHANNEL_ID = 1506965475270332476
 VERIFY_ROLE_ID = 1483039214793789489
 
-# הגדרת הבוט וה-Intents הבסיסיים ביותר למניעת חסימות
+# הגדרת intents בסיסיים ויציבים
 intents = discord.Intents.default()
 intents.messages = True
 intents.message_content = True
@@ -55,48 +55,43 @@ async def update_fivem_status():
     global status_message
     await bot.wait_until_ready()
     
-    # שליפת חדר וערוץ מתוך השרת בצורה מאובטחת
     guild = bot.get_guild(GUILD_ID)
     channel = bot.get_channel(STATUS_CHANNEL_ID)
     if not guild or not channel:
         return
 
-    # 1. חישוב נתוני אמת של הדיסקורד (עובד תמיד ב-100%)
+    # 1. חישוב נתוני דיסקורד (תמיד עובד)
     total_members = guild.member_count
 
-    # ערכי ברירת מחדל למקרה שה-FiveM באופליין או לא מגיב
+    # ערכי ברירת מחדל למצב אופליין
     clients = 0
     max_clients = 32
     status_text = "🔴 Offline"
     status_color = discord.Color.red()
     activity_text = "0 / 32 of FIVEM"
 
-    # 2. פנייה מאובטחת ל-API של FiveM (עטופה בהגנה מוחלטת מקריסות)
-    url = f"https://servers-frontend.fivem.net/api/servers/single/{CFX_CODE}"
-    headers = {"User-Agent": "Mozilla/5.0"}
-    
+    # 2. פנייה לקובץ הנתונים הרשמי של השרת (עטוף ב-try/except מוחלט כדי למנוע קריסות)
+    url = f"http://{SERVER_IP}/dynamic.json"
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.get(url, headers=headers, timeout=5) as response:
+            async with session.get(url, timeout=5) as response:
                 if response.status == 200:
                     data = await response.json()
-                    server_data = data.get('Data', {})
-                    if server_data:
-                        clients = server_data.get('clients', 0)
-                        max_clients = server_data.get('sv_maxclients', 32)
-                        status_text = "🟢 Online"
-                        status_color = discord.Color.green()
-                        activity_text = f"{clients} / {max_clients} of FIVEM"
+                    clients = data.get('clients', 0)
+                    max_clients = data.get('sv_maxclients', 32)
+                    status_text = "🟢 Online"
+                    status_color = discord.Color.green()
+                    activity_text = f"{clients} / {max_clients} of FIVEM"
     except Exception as e:
-        print(f"[FiveM API Connection Saved] Server is offline or API timed out: {e}")
+        print(f"[FiveM Bot Info] Server IP connection timed out or closed: {e}")
 
-    # 3. עדכון הסטטוס בביו של הבוט (Custom Activity - Watching)
+    # 3. עדכון הסטטוס של הבוט עצמו (Watching)
     try:
         await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name=activity_text))
     except:
         pass
 
-    # 4. בניית הודעת הסטטוס המעוצבת (Properties Block)
+    # 4. יצירת הודעת ה-Embed המוכרת
     embed = discord.Embed(
         title=f"📊 {SERVER_NAME} | Live Status",
         description="Here you can see the live statistics of our community.",
@@ -118,7 +113,7 @@ async def update_fivem_status():
     if guild.icon: embed.set_thumbnail(url=guild.icon.url)
     embed.set_footer(text="🔄 Auto-updates every 60 seconds")
 
-    # 5. מנגנון סריקה ועריכה/שליחה אוטומטי לחלוטין ללא תקיעות
+    # 5. ניהול ושליחת ההודעה בערוץ ללא כפילויות
     try:
         if status_message is None:
             async for msg in channel.history(limit=5):
@@ -135,7 +130,7 @@ async def update_fivem_status():
 
 @bot.event
 async def on_ready():
-    print(f"Logged in and synchronized as {bot.user.name}")
+    print(f"Logged in as {bot.user.name}")
     if not update_fivem_status.is_running():
         update_fivem_status.start()
 # מאגר נתונים זמני בזיכרון עבור אזהרות
