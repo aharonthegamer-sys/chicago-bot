@@ -1,10 +1,30 @@
 import os
 import asyncio
 import discord
+from flask import Flask
+from threading import Thread
 from discord.ext import tasks, commands
 
 # ========================================================
-# קונפיגורציה קשיחה – CHICAGO CITY DIAMOND VIP
+# 1. שרת FLASK הרמטי למניעת קריסות פורט ב-RENDER
+# ========================================================
+app = Flask('')
+
+@app.route('/')
+def home():
+    return "Chicago City Core Alive"
+
+def run_flask():
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host='0.0.0.0', port=port)
+
+def keep_alive():
+    t = Thread(target=run_flask)
+    t.daemon = True
+    t.start()
+
+# ========================================================
+# 2. קונפיגורציה קשיחה ומעודכנת – CHICAGO CITY VIP
 # ========================================================
 SERVER_NAME = "Chicago City Roleplay"
 GUILD_ID = 1483039214793789483
@@ -18,7 +38,6 @@ GIVEAWAY_FEED_CH = 1483039216366780532
 WARN_FEED_CH = 1483039219336347810
 SUGGEST_FEED_CH = 1483039217482334253
 
-# רשת ערוצי הלוגים המלאה של שיקגו סיטי
 LOG_TICKET = 1483039219654852612
 LOG_SECURITY = 1483039220284002367
 LOG_ROLE_ADD = 1507881637705420961
@@ -28,7 +47,6 @@ VERIFY_ROLE_ID = 1483039214793789489
 STAFF_ROLE_ID = 1483039215364345930
 GIVEAWAY_ROLE_ID = 1506419159414603868
 WARN_STAFF_ROLE_ID = 1483039215393702012
-
 intents = discord.Intents.default()
 intents.messages = True
 intents.message_content = True 
@@ -39,6 +57,7 @@ intents.presences = True
 bot = commands.Bot(command_prefix="!", intents=intents, chunk_guilds_at_startup=True)
 status_message = None
 warnings_db = {}
+
 async def dispatch_log(target_id, title, description, color=0x010101, fields=None):
     channel = bot.get_channel(target_id)
     if not channel: return
@@ -256,6 +275,7 @@ class SuggestionsPanelView(discord.ui.View):
         if interaction.guild.get_role(VERIFY_ROLE_ID) not in interaction.user.roles and not interaction.user.guild_permissions.administrator:
             return await interaction.response.send_message("❌ עליך להתאמת קודם!", ephemeral=True)
         await interaction.response.send_modal(CreateSuggestionModal())
+
 @bot.event
 async def on_member_update(before, after):
     if before.guild.id != GUILD_ID: return
@@ -323,5 +343,6 @@ async def on_ready():
     if not update_discord_radar.is_running(): update_discord_radar.start()
 
 if __name__ == "__main__":
+    keep_alive()
     token = os.getenv("DISCORD_TOKEN")
     if token: bot.run(token)
