@@ -9,8 +9,8 @@ from discord.ext import tasks, commands
 SERVER_NAME = "Chicago City Roleplay"
 GUILD_ID = 1483039214793789483
 
-LOGO_URL = "https://discordapp.com"
-BANNER_URL = "https://discordapp.com"
+LOGO_URL = "https://ibb.co"
+BANNER_URL = "https://ibb.co"
 
 STATUS_CHANNEL_ID = 1506965475270332476
 WELCOME_CHANNEL_ID = 1483039215032041530
@@ -146,7 +146,6 @@ class TicketControlView(discord.ui.View):
         button.disabled, button.label, button.style = True, f"בטיפול: {interaction.user.name}", discord.ButtonStyle.secondary
         await interaction.response.edit_message(view=self)
         await interaction.channel.send(embed=discord.Embed(description=f"💼 הפנייה נלקחה לטיפול של {interaction.user.mention}", color=discord.Color.green()))
-
     @discord.ui.button(label="✏️ שינוי שם", style=discord.ButtonStyle.primary, custom_id="btn_rn_v12")
     async def rename_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
         staff = interaction.guild.get_role(STAFF_ROLE_ID)
@@ -164,33 +163,43 @@ class TicketControlView(discord.ui.View):
 class TicketDropdown(discord.ui.Select):
     def __init__(self):
         options = [
-            discord.SelectOption(label="דיווח על שחקן / צוות", value="report", emoji="🚨"),
-            discord.SelectOption(label="דיווח על באג", value="bug", emoji="🐛"),
-            discord.SelectOption(label="בחינה לצוות השרת", value="apply", emoji="📝"),
-            discord.SelectOption(label="שאלה כללית / עזרה", value="general", emoji="❓")
+            discord.SelectOption(label="דיווח על שחקן / צוות", description="Report a player or staff", emoji="🚨", value="report"),
+            discord.SelectOption(label="דיווח על באג", description="Report a server bug", emoji="🐛", value="bug"),
+            discord.SelectOption(label="בחינה לצוות השרת", description="Apply for staff", emoji="📝", value="apply"),
+            discord.SelectOption(label="שאלה כללית / עזרה", description="General help", emoji="❓", value="general")
         ]
         super().__init__(placeholder="🔽 בחר את קטגוריית הפנייה שלך...", options=options, custom_id="dropdown_v12")
 
     async def callback(self, interaction: discord.Interaction):
-        category = self.values
+        category = self.values[0]
         guild = interaction.guild
         ticket_name = f"{category}-{interaction.user.name}".lower()
+        
         if discord.utils.get(guild.channels, name=ticket_name):
             return await interaction.response.send_message("❌ כבר יש לך פנייה פתוחה!", ephemeral=True)
+        
+        staff_role = guild.get_role(STAFF_ROLE_ID)
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(read_messages=False),
             interaction.user: discord.PermissionOverwrite(read_messages=True, send_messages=True, attach_files=True),
             guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True)
         }
+        if staff_role:
+            overwrites[staff_role] = discord.PermissionOverwrite(read_messages=True, send_messages=True, attach_files=True)
+            
         channel = await guild.create_text_channel(name=ticket_name, overwrites=overwrites)
-        embed = discord.Embed(title=f"🎫 מרכז תמיכה | קטגוריה: {category.upper()}", description=f"שלום {interaction.user.mention},\nפרט את המקרה כאן בצ'אט בצורה מורחבת.", color=0x5865F2)
+        
+        embed = discord.Embed(title=f"🎫 מרכז תמיכה | קטגוריה: {category.upper()}", description=f"שלום {interaction.user.mention},\nפרט את המקרה כאן בצ'אט בצורה מורחבת והעלה הוכחות.", color=0x5865F2)
         embed.set_image(url=BANNER_URL)
+        
         await channel.send(embed=embed, view=TicketControlView())
         await interaction.response.send_message(f"✅ פנייה נוצרה: {channel.mention}", ephemeral=True)
         await dispatch_log(LOG_TICKET, "Ticket Opened", f"Opened by {interaction.user.name}", 0xe67e22, {"Channel": channel.name})
 
 class TicketOpenView(discord.ui.View):
-    def __init__(self): super().__init__(timeout=None); self.add_item(TicketDropdown())
+    def __init__(self):
+        super().__init__(timeout=None)
+        self.add_item(TicketDropdown())
 class CreateGiveawayModal(discord.ui.Modal, title="🎁 הגרלה חדשה"):
     g_title = discord.ui.TextInput(label="מה הפרס?")
     g_time = discord.ui.TextInput(label="זמן בדקות")
@@ -247,7 +256,6 @@ class SuggestionsPanelView(discord.ui.View):
         if interaction.guild.get_role(VERIFY_ROLE_ID) not in interaction.user.roles and not interaction.user.guild_permissions.administrator:
             return await interaction.response.send_message("❌ עליך להתאמת קודם!", ephemeral=True)
         await interaction.response.send_modal(CreateSuggestionModal())
-
 @bot.event
 async def on_member_update(before, after):
     if before.guild.id != GUILD_ID: return
