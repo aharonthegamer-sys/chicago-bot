@@ -4,12 +4,11 @@ import discord
 from discord.ext import tasks, commands
 
 # ========================================================
-# קונפיגורציה קשיחה – CHICAGO CITY VIP
+# קונפיגורציה קשיחה – CHICAGO CITY DIAMOND VIP
 # ========================================================
 SERVER_NAME = "Chicago City Roleplay"
 GUILD_ID = 1483039214793789483
 
-# קישורי המדיה הסטטיים מהשרת המאובטח שלכם
 LOGO_URL = "https://discordapp.com"
 BANNER_URL = "https://discordapp.com"
 
@@ -19,7 +18,7 @@ GIVEAWAY_FEED_CH = 1483039216366780532
 WARN_FEED_CH = 1483039219336347810
 SUGGEST_FEED_CH = 1483039217482334253
 
-# רשת ערוצי הלוגים המלאה של השרת
+# רשת ערוצי הלוגים המלאה של שיקגו סיטי
 LOG_TICKET = 1483039219654852612
 LOG_SECURITY = 1483039220284002367
 LOG_ROLE_ADD = 1507881637705420961
@@ -99,7 +98,7 @@ async def on_member_join(member):
     except: pass
 class VerifyView(discord.ui.View):
     def __init__(self): super().__init__(timeout=None)
-    @discord.ui.button(label="🔑 אימות חשבון / VERIFY", style=discord.ButtonStyle.green, custom_id="verify_btn_diamond_v11")
+    @discord.ui.button(label="🔑 אימות חשבון / VERIFY", style=discord.ButtonStyle.green, custom_id="verify_btn_diamond_v12")
     async def verify_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         role = interaction.guild.get_role(VERIFY_ROLE_ID)
         if not role: return await interaction.response.send_message("❌ רול אימות חסר.", ephemeral=True)
@@ -130,7 +129,7 @@ class AddMemberModal(discord.ui.Modal, title="👤 הוספת חבר לטיקט 
 
 class TicketControlView(discord.ui.View):
     def __init__(self): super().__init__(timeout=None)
-    @discord.ui.button(label="🔒 Close", style=discord.ButtonStyle.danger, custom_id="btn_close_v11")
+    @discord.ui.button(label="🔒 Close", style=discord.ButtonStyle.danger, custom_id="btn_close_v12")
     async def close_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
         staff = interaction.guild.get_role(STAFF_ROLE_ID)
         if staff not in interaction.user.roles and not interaction.user.guild_permissions.administrator:
@@ -139,7 +138,7 @@ class TicketControlView(discord.ui.View):
         await dispatch_log(LOG_TICKET, "Ticket Closed", f"{interaction.channel.name} deleted.", 0xe74c3c, {"Staff": interaction.user.name})
         await asyncio.sleep(5); await interaction.channel.delete()
 
-    @discord.ui.button(label="🙋‍♂️ Claim", style=discord.ButtonStyle.success, custom_id="btn_claim_v11")
+    @discord.ui.button(label="🙋‍♂️ Claim", style=discord.ButtonStyle.success, custom_id="btn_claim_v12")
     async def claim_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
         staff = interaction.guild.get_role(STAFF_ROLE_ID)
         if staff not in interaction.user.roles and not interaction.user.guild_permissions.administrator:
@@ -148,14 +147,14 @@ class TicketControlView(discord.ui.View):
         await interaction.response.edit_message(view=self)
         await interaction.channel.send(embed=discord.Embed(description=f"💼 הפנייה נלקחה לטיפול של {interaction.user.mention}", color=discord.Color.green()))
 
-    @discord.ui.button(label="✏️ שינוי שם", style=discord.ButtonStyle.primary, custom_id="btn_rn_v11")
+    @discord.ui.button(label="✏️ שינוי שם", style=discord.ButtonStyle.primary, custom_id="btn_rn_v12")
     async def rename_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
         staff = interaction.guild.get_role(STAFF_ROLE_ID)
         if staff not in interaction.user.roles and not interaction.user.guild_permissions.administrator:
             return await interaction.response.send_message("❌ חסום לצוות!", ephemeral=True)
         await interaction.response.send_modal(RenameTicketModal())
 
-    @discord.ui.button(label="➕ הוסף משתמש", style=discord.ButtonStyle.secondary, custom_id="btn_add_v11")
+    @discord.ui.button(label="➕ הוסף משתמש", style=discord.ButtonStyle.secondary, custom_id="btn_add_v12")
     async def add_member(self, interaction: discord.Interaction, button: discord.ui.Button):
         staff = interaction.guild.get_role(STAFF_ROLE_ID)
         if staff not in interaction.user.roles and not interaction.user.guild_permissions.administrator:
@@ -170,7 +169,7 @@ class TicketDropdown(discord.ui.Select):
             discord.SelectOption(label="בחינה לצוות השרת", value="apply", emoji="📝"),
             discord.SelectOption(label="שאלה כללית / עזרה", value="general", emoji="❓")
         ]
-        super().__init__(placeholder="🔽 בחר את קטגוריית הפנייה שלך...", options=options, custom_id="dropdown_v11")
+        super().__init__(placeholder="🔽 בחר את קטגוריית הפנייה שלך...", options=options, custom_id="dropdown_v12")
 
     async def callback(self, interaction: discord.Interaction):
         category = self.values
@@ -178,14 +177,13 @@ class TicketDropdown(discord.ui.Select):
         ticket_name = f"{category}-{interaction.user.name}".lower()
         if discord.utils.get(guild.channels, name=ticket_name):
             return await interaction.response.send_message("❌ כבר יש לך פנייה פתוחה!", ephemeral=True)
-        
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(read_messages=False),
             interaction.user: discord.PermissionOverwrite(read_messages=True, send_messages=True, attach_files=True),
             guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True)
         }
         channel = await guild.create_text_channel(name=ticket_name, overwrites=overwrites)
-        embed = discord.Embed(title=f"🎫 מרכז תמיכה | קטגוריה: {category.upper()}", description=f"שלום {interaction.user.mention},\nפרט את המקרה כאן בצ'אט בצורה מורחבת והעלה הוכחות.", color=0x5865F2)
+        embed = discord.Embed(title=f"🎫 מרכז תמיכה | קטגוריה: {category.upper()}", description=f"שלום {interaction.user.mention},\nפרט את המקרה כאן בצ'אט בצורה מורחבת.", color=0x5865F2)
         embed.set_image(url=BANNER_URL)
         await channel.send(embed=embed, view=TicketControlView())
         await interaction.response.send_message(f"✅ פנייה נוצרה: {channel.mention}", ephemeral=True)
@@ -205,7 +203,7 @@ class CreateGiveawayModal(discord.ui.Modal, title="🎁 הגרלה חדשה"):
 
 class GiveawayPanelView(discord.ui.View):
     def __init__(self): super().__init__(timeout=None)
-    @discord.ui.button(label="🎁 פתח הגרלה חדשה לשחקנים", style=discord.ButtonStyle.green, custom_id="g_p_v11")
+    @discord.ui.button(label="🎁 פתח הגרלה חדשה לשחקנים", style=discord.ButtonStyle.green, custom_id="g_p_v12")
     async def open_g(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.guild.get_role(GIVEAWAY_ROLE_ID) not in interaction.user.roles and not interaction.user.guild_permissions.administrator:
             return await interaction.response.send_message("❌ פעולה חסומה!", ephemeral=True)
@@ -227,7 +225,7 @@ class IssueWarnModal(discord.ui.Modal, title="Warn User"):
 
 class WarnPanelView(discord.ui.View):
     def __init__(self): super().__init__(timeout=None)
-    @discord.ui.button(label="⚠️ רשום אזהרה למנהל", style=discord.ButtonStyle.danger, custom_id="w_p_v11")
+    @discord.ui.button(label="⚠️ רשום אזהרה למנהל", style=discord.ButtonStyle.danger, custom_id="w_p_v12")
     async def issue_w(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.guild.get_role(WARN_STAFF_ROLE_ID) not in interaction.user.roles and not interaction.user.guild_permissions.administrator:
             return await interaction.response.send_message("❌ פעולה חסומה!", ephemeral=True)
@@ -244,7 +242,7 @@ class CreateSuggestionModal(discord.ui.Modal, title="Suggestion"):
 
 class SuggestionsPanelView(discord.ui.View):
     def __init__(self): super().__init__(timeout=None)
-    @discord.ui.button(label="🗳️ לחצו כאן והגישו הצעה חדשה לעיר", style=discord.ButtonStyle.primary, custom_id="s_p_v11")
+    @discord.ui.button(label="🗳️ לחצו כאן והגישו הצעה חדשה לעיר", style=discord.ButtonStyle.primary, custom_id="s_p_v12")
     async def open_s(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.guild.get_role(VERIFY_ROLE_ID) not in interaction.user.roles and not interaction.user.guild_permissions.administrator:
             return await interaction.response.send_message("❌ עליך להתאמת קודם!", ephemeral=True)
