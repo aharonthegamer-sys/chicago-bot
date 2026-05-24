@@ -6,13 +6,13 @@ from threading import Thread
 from discord.ext import tasks, commands
 
 # ========================================================
-# 1. שרת FLASK מובנה עבור RENDER (WEB INFRA)
+# 1. שרת FLASK מובנה עבור RENDER
 # ========================================================
 app = Flask('')
 
 @app.route('/')
 def home():
-    return "Chicago City Diamond Core v9 Invite-Tracker Online"
+    return "Chicago City Diamond Core v9 Final Operational"
 
 def run_flask():
     port = int(os.environ.get("PORT", 10000))
@@ -24,28 +24,28 @@ def keep_alive():
     t.start()
 
 # ========================================================
-# 2. קונפיגורציה קשיחה – ערוצים, רולים וקישורי באנרים
+# 2. קונפיגורציה קשיחה – קישורי מדיה נקיים ויציבים
 # ========================================================
 SERVER_NAME = "Chicago City Roleplay"
 GUILD_ID = 1483039214793789483
 
-# שימוש בבאנר המטאלי הרשמי שלכם לכל רכיבי ה-Embed בקוד
-LOGO_URL = "https://discordapp.com"
-BANNER_URL = "https://discordapp.com"
+# קישורי תמונות ישירים ונקיים בפורמט קבוע שלא נחסם לעולם
+LOGO_URL = "https://postimg.cc"
+BANNER_URL = "https://postimg.cc"
 
 STATUS_CHANNEL_ID = 1506965475270332476       # סרבר סטטוס
 WELCOME_CHANNEL_ID = 1483039215032041530      # ברוכים הבאים
-INVITE_TRACKER_CH = 1506417177719210194       # חדר מעקב הזמנות החדש שנתת לי!
+INVITE_TRACKER_CH = 1506417177719210194       # מעקב הזמנות
 
 GIVEAWAY_FEED_CH = 1483039216366780532
 WARN_FEED_CH = 1483039219336347810
 SUGGEST_FEED_CH = 1483039217482334253
 
-# רשת ערוצי הלוגים הפנימית
 LOG_TICKET = 1483039219654852612
 LOG_SECURITY = 1483039220284002367
 LOG_ROLE_ADD = 1507881637705420961
 LOG_ROLE_REMOVE = 1507881755753971872
+LOG_MEMBER_ADD = 1483039219923554475
 
 VERIFY_ROLE_ID = 1483039214793789489
 STAFF_ROLE_ID = 1483039215364345930
@@ -55,9 +55,9 @@ intents = discord.Intents.default()
 intents.messages = True
 intents.message_content = True 
 intents.guilds = True         
-intents.members = True   
+intents.members = True   # אינטנט קריטי להפעלת כניסת חברים!
 intents.presences = True      
-intents.invites = True # אינטנט הכרחי להפעלת מעקב הזמנות!
+intents.invites = True   # אינטנט קריטי להפעלת מעקב הזמנות!
 
 bot = commands.Bot(command_prefix="!", intents=intents, chunk_guilds_at_startup=True)
 status_message = None
@@ -117,16 +117,23 @@ async def get_invites_dict(guild):
 async def on_member_join(member):
     if member.guild.id != GUILD_ID: return
     
-    # 1. שליחת הודעת ברוכים הבאים קלאסית לערוץ welcome
+    # 1. שליחת הודעת ברכה מעוצבת אש לערוץ welcome
     w_channel = bot.get_channel(WELCOME_CHANNEL_ID)
     if w_channel:
-        w_embed = discord.Embed(title="📥 WELCOME TO CHICAGO CITY!", description=f"שלום רב {member.mention},\nברוך הבא לשרת הרשמי של Chicago City Roleplay!\n\nאנא כנס לערוץ האימות ועבור אימות חשבון כדי לקבל גישה.", color=0x2ecc71)
+        w_embed = discord.Embed(
+            title="📥 WELCOME TO CHICAGO CITY!", 
+            description=f"שלום רב {member.mention},\nברוך הבא לשרת הרשמי של **Chicago City Roleplay**!\n\n"
+                        f"אנא כנס לערוץ האימות ועבור אימות חשבון כדי לקבל גישה מלאה לכל החדרים.", 
+            color=0x2ecc71
+        )
         w_embed.set_thumbnail(url=member.display_avatar.url)
         w_embed.set_image(url=BANNER_URL)
+        w_embed.set_footer(text=f"Chicago City Member #{member.guild.member_count}")
+        w_embed.timestamp = discord.utils.utcnow()
         try: await w_channel.send(embed=w_embed)
         except: pass
 
-    # 2. מנגנון מעקב הזמנות חכם ושליחת אמבד מפואר לערוץ שביקשת
+    # 2. מנגנון מעקב הזמנות ודיווח לערוץ הפיד הייעודי
     track_channel = bot.get_channel(INVITE_TRACKER_CH)
     if not track_channel: return
     
@@ -146,7 +153,7 @@ async def on_member_join(member):
 
     embed = discord.Embed(
         title="📥 הצטרפות חדשה - מעקב הזמנות",
-        description=f"המשתמש {member.mention} נכנס לשרת.\n\n"
+        description=f"המשתמש {member.mention} נכנס לשרת הרשת.\n\n"
                     f"👑 **הוזמן על ידי:** {inviter_text}\n"
                     f"📊 **סך הכל הזמנות שלו:** `{uses_count}`\n\n"
                     f"**─── NETWORK DATABASE ───**",
@@ -154,7 +161,7 @@ async def on_member_join(member):
     )
     embed.add_field(name="🆔 מספר מזהה (ID)", value=f"`{member.id}`", inline=False)
     embed.set_image(url=BANNER_URL)
-    embed.set_footer(text=f"Chicago City Member • #{guild.member_count}")
+    embed.set_footer(text=f"Chicago City Audit • #{guild.member_count}")
     embed.timestamp = discord.utils.utcnow()
     
     try: await track_channel.send(embed=embed)
@@ -191,7 +198,7 @@ class AddMemberModal(discord.ui.Modal, title="👤 הוספת חבר לטיקט"
             await interaction.channel.set_permissions(member, read_messages=True, send_messages=True, attach_files=True)
             await interaction.response.send_message(f"✅ המשתמש {member.mention} התווסף לטיקט בהצלחה!")
             await dispatch_log(LOG_TICKET, "Member Added", f"Added {member.name}", 0x9b59b6, {"Staff": interaction.user.name})
-        else: await interaction.response.send_message("❌ המערכת לא זיהתה את המשתמש.", ephemeral=True)
+        else: await interaction.response.send_message("❌ המערכת לא זיהתה את המשתמש. תייג שוב.", ephemeral=True)
 
 class TicketControlView(discord.ui.View):
     def __init__(self): super().__init__(timeout=None)
@@ -253,7 +260,7 @@ class TicketDropdown(discord.ui.Select):
         if staff_role: overwrites[staff_role] = discord.PermissionOverwrite(read_messages=True, send_messages=True, attach_files=True)
         
         channel = await guild.create_text_channel(name=ticket_name, overwrites=overwrites)
-        embed = discord.Embed(title=f"🎫 מרכז תמיכה | קטגוריה: {category.upper()}", description=f"שלום {interaction.user.mention},\nפרט את המקרה כאן בצ'אט בצורה מורחבת.", color=0x5865F2)
+        embed = discord.Embed(title=f"🎫 מרכז תמיכה | קטגוריה: {category.upper()}", description=f"שלום {interaction.user.mention},\nפרט את המקרה כאן בצ'אט בצורה מורחבת.")
         embed.set_image(url=BANNER_URL)
         await channel.send(embed=embed, view=TicketControlView())
         await interaction.response.send_message(f"✅ פנייה נוצרה: {channel.mention}", ephemeral=True)
